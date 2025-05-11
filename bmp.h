@@ -44,7 +44,7 @@ typedef struct BmpImageT {
     uint16_t bpp;
     BMPColorT* palette;
     void* pixels;
-};
+} BMPImageT;
 #pragma pack(pop)
 
 typedef struct BmpImageT BmpImage;

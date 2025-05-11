@@ -35,7 +35,8 @@ bool is_readable_bmp(FILE* file) {
     BitmapInfoHeader iheader;
 
     // Attempt to read file header
-    if (fread(&fheader, sizeof(BitmapFileHeader), 1, file) != 1) {
+    fread(&fheader, sizeof(BitmapFileHeader), 1, file);
+    if (ferror(file)) {
         perror("Error reading file header");
         rewind(file);
         return false;
@@ -49,7 +50,8 @@ bool is_readable_bmp(FILE* file) {
     }
 
     // Attempt to read info header
-    if (fread(&iheader, sizeof(BitmapInfoHeader), 1, file) != 1) {
+    fread(&iheader, sizeof(BitmapInfoHeader), 1, file);
+    if (ferror(file)) {
         perror("Error reading info header");
         rewind(file);
         return false;
@@ -78,7 +80,7 @@ bool is_readable_bmp(FILE* file) {
 
     // Only support bottom-up images
     if (iheader.height < 0) {
-        fprintf(stderr, "Unsupported image orientation: Top-down\n", iheader.height);
+        fprintf(stderr, "Unsupported image orientation: Top-down\n");
         rewind(file);
         return false;
     }
@@ -102,7 +104,6 @@ BmpImage* bmp_load(const char* filename) {
         return NULL;
     }
 
-    bool error = false;
     BmpImage* image = malloc(sizeof(BmpImage));
 
     if (image == NULL) {
