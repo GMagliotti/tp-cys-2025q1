@@ -2,6 +2,8 @@
 #define _PERMATRAGO_H
 
 #include <stdint.h>
+#include <stdlib.h>
+#include <stdio.h>
 
 /**
  * @brief Sets the seed for the pseudo-random character generator.
@@ -24,4 +26,18 @@ void set_seed(int64_t s);
  */
 uint8_t next_char(void);
 
+/**
+ * @brief Allocates and fills a table with pseudo-random characters.
+ * 
+ * The output is influenced by the previously set seed value.
+ * 
+ * @param size The number of characters to generate and fill in the table.
+ * 
+ * @return A pointer to the allocated table filled with random characters,
+ *         or NULL if memory allocation fails.
+ * 
+ * @note The caller is responsible for freeing the allocated memory for
+ *       the table when it is no longer needed.
+ */
+uint8_t *get_rng_table(size_t size);
 #endif
