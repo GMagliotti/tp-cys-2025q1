@@ -1,25 +1,6 @@
 #include "sss.h"
 #include "sss_algos.h"
 
-uint8_t *get_rng_table(size_t size) {
-    int64_t seed = 0L; 
-    uint8_t *table = malloc(size * sizeof(uint8_t));
-
-    if (table == NULL)
-    {
-        fprintf(stderr, "Failed to allocate memory for RNG table\n");
-        return NULL;
-    }
-
-    set_seed(seed);
-
-    for (int i = 0; i < size * sizeof(uint8_t); i++)
-    {
-        table[i] = next_char();
-    }
-    return table;
-}
-
 static DistributeFnT get_distribute_function(uint32_t k)
 {
     if (k == 8)
@@ -52,9 +33,11 @@ BMPImageT **sss_distribute(BMPImageT *image, uint32_t k, uint32_t n)
     }
 
     BMPImageT **shadows = get_distribute_function(k)(image, k, n);
+    return shadows;
 }
 
 BMPImageT *sss_recover(BMPImageT **shadows, uint32_t k)
 {
     BMPImageT *image = get_recover_function(k)(shadows, k);
+    return image;
 }
