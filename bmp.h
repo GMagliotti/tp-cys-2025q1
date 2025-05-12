@@ -54,7 +54,7 @@ typedef struct BmpImageT BmpImage;
  * @param filename The name of the BMP file to open.
  * @return A pointer to a BmpImage structure containing the image data, or NULL on failure.
  */
-BmpImage* bmp_load(const char *filename);
+BmpImage *bmp_load(const char *filename);
 
 /**
  * @brief Save a BMP image to a file.
@@ -62,12 +62,12 @@ BmpImage* bmp_load(const char *filename);
  * @param image A pointer to the BmpImage structure containing the image data. Must be constant.
  * @return 0 on success, -1 on failure.
  */
-int bmp_save(const char *filename, const BmpImage* image);
+int bmp_save(const char *filename, const BmpImage *image);
 
 /**
  * @brief Frees the memory allocated for a BMP image.
  * @param image A pointer to the BmpImage structure to free.
  */
-void bmp_unload(BmpImage* image);
+void bmp_unload(BmpImage *image);
 
 #endif
