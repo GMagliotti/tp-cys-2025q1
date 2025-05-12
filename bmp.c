@@ -1,49 +1,55 @@
 #include "bmp.h"
 
 #pragma pack(push, 1)
-typedef struct {
-    uint8_t signature[2]; 
+typedef struct
+{
+    uint8_t signature[2];
     uint32_t file_size;
     uint8_t reserved[4];
     uint32_t bof; // Beginning of bitmap data - offset
 } BitmapFileHeader;
 
-typedef struct {
+typedef struct
+{
     uint32_t dib_header_size; // The typical Win 3.x header size is 40 bytes
     int32_t width;
     int32_t height;
-    uint16_t planes; // Must be 1
-    uint16_t bpp; // Bits per pixel
-    uint32_t compression; // Compression type - (0 = none, 1 = RLE8, 2 = RLE4)
-    uint32_t image_size; // Size of the image data, may be 0 if uncompressed
-    int32_t h_resolution; // Horizontal resolution in pixels per meter
-    int32_t v_resolution; // Vertical resolution in pixels per meter
-    uint32_t colors_used; // Number of colors in the color palette (0 = default)
+    uint16_t planes;           // Must be 1
+    uint16_t bpp;              // Bits per pixel
+    uint32_t compression;      // Compression type - (0 = none, 1 = RLE8, 2 = RLE4)
+    uint32_t image_size;       // Size of the image data, may be 0 if uncompressed
+    int32_t h_resolution;      // Horizontal resolution in pixels per meter
+    int32_t v_resolution;      // Vertical resolution in pixels per meter
+    uint32_t colors_used;      // Number of colors in the color palette (0 = default)
     uint32_t important_colors; // Number of important colors (0 = all)
 } BitmapInfoHeader;
 
-typedef struct {
+typedef struct
+{
     BitmapFileHeader file_header;
     BitmapInfoHeader info_header;
-    BMPColorT* palette; // Color palette (if present)
-    void* pixels; // Pointer to pixel data
+    BMPColorT *palette; // Color palette (if present)
+    void *pixels;       // Pointer to pixel data
 } Win3xBmpImageData;
 #pragma pack(pop)
 
-bool is_readable_bmp(FILE* file) {
+bool is_readable_bmp(FILE *file)
+{
     BitmapFileHeader fheader;
     BitmapInfoHeader iheader;
 
     // Attempt to read file header
     fread(&fheader, sizeof(BitmapFileHeader), 1, file);
-    if (ferror(file)) {
+    if (ferror(file))
+    {
         perror("Error reading file header");
         rewind(file);
         return false;
     }
 
     // Check BMP signature
-    if (fheader.signature[0] != 'B' || fheader.signature[1] != 'M') {
+    if (fheader.signature[0] != 'B' || fheader.signature[1] != 'M')
+    {
         fprintf(stderr, "Invalid BMP signature\n");
         rewind(file);
         return false;
@@ -51,41 +57,47 @@ bool is_readable_bmp(FILE* file) {
 
     // Attempt to read info header
     fread(&iheader, sizeof(BitmapInfoHeader), 1, file);
-    if (ferror(file)) {
+    if (ferror(file))
+    {
         perror("Error reading info header");
         rewind(file);
         return false;
     }
 
     // Check header size (Win3.x format)
-    if (iheader.dib_header_size != sizeof(BitmapInfoHeader)) {
+    if (iheader.dib_header_size != sizeof(BitmapInfoHeader))
+    {
         fprintf(stderr, "Unsupported DIB header size: %u\n", iheader.compression);
         rewind(file);
         return false;
     }
 
     // Only support 8-bit images
-    if (iheader.bpp != 8) {
+    if (iheader.bpp != 8)
+    {
         fprintf(stderr, "Unsupported bits per pixel: %u\n", iheader.bpp);
         rewind(file);
         return false;
     }
 
     // Only support uncompressed images
-    if (iheader.compression != 0) {
+    if (iheader.compression != 0)
+    {
         fprintf(stderr, "Unsupported compression type: %u\n", iheader.compression);
         rewind(file);
         return false;
     }
 
     // Only support bottom-up images
-    if (iheader.height < 0) {
+    if (iheader.height < 0)
+    {
         fprintf(stderr, "Unsupported image orientation: Top-down\n");
         rewind(file);
         return false;
     }
 
-    if (iheader.width <= 0 || abs(iheader.height) <= 0) {
+    if (iheader.width <= 0 || abs(iheader.height) <= 0)
+    {
         fprintf(stderr, "Invalid image dimensions: %d x %d\n", iheader.width, abs(iheader.height));
         rewind(file);
         return false;
@@ -96,22 +108,41 @@ bool is_readable_bmp(FILE* file) {
     return true;
 }
 
-BmpImage* bmp_load(const char* filename) {
-    FILE* file = fopen(filename, "rb");
+uint32_t calculate_file_size(const BmpImage *image)
+{
+    if (image == NULL)
+    {
+        return 0;
+    }
 
-    if (file == NULL) {
+    uint32_t bytes_per_pixel = image->bpp / 8;
+    uint32_t bytes_per_scanline = (image->width * bytes_per_pixel + 3) & ~3; // Align to 4-byte boundary
+    uint32_t image_size = bytes_per_scanline * abs(image->height);
+    uint32_t palette_size = image->bpp <= 8 ? (1 << image->bpp) * sizeof(BMPColorT) : 0;
+
+    return sizeof(BitmapFileHeader) + sizeof(BitmapInfoHeader) + palette_size + image_size;
+}
+
+BmpImage *bmp_load(const char *filename)
+{
+    FILE *file = fopen(filename, "rb");
+
+    if (file == NULL)
+    {
         perror("Error opening file");
         return NULL;
     }
 
-    BmpImage* image = malloc(sizeof(BmpImage));
+    BmpImage *image = malloc(sizeof(BmpImage));
 
-    if (image == NULL) {
+    if (image == NULL)
+    {
         perror("Error allocating memory");
         goto cleanup_file;
     }
 
-    if (!is_readable_bmp(file)) {
+    if (!is_readable_bmp(file))
+    {
         fprintf(stderr, "Invalid BMP file\n");
         goto cleanup_image;
     }
@@ -119,13 +150,15 @@ BmpImage* bmp_load(const char* filename) {
     BitmapFileHeader fheader;
     BitmapInfoHeader iheader;
     fread(&fheader, sizeof(BitmapFileHeader), 1, file);
-    if (ferror(file)) {
+    if (ferror(file))
+    {
         perror("Error reading file header");
         goto cleanup_image;
     }
 
     fread(&iheader, sizeof(BitmapInfoHeader), 1, file);
-    if (ferror(file)) {
+    if (ferror(file))
+    {
         perror("Error reading info header");
         goto cleanup_image;
     }
@@ -136,35 +169,40 @@ BmpImage* bmp_load(const char* filename) {
     uint32_t image_size = bytes_per_scanline * abs(iheader.height);
 
     image->palette = calloc(palette_entries, sizeof(*image->palette));
-    if (image->palette == NULL) {
+    if (image->palette == NULL)
+    {
         perror("Error allocating memory for palette data");
         goto cleanup_image;
     }
 
     image->pixels = malloc(image_size);
-    if (image->pixels == NULL) {
+    if (image->pixels == NULL)
+    {
         perror("Error allocating memory for pixel data");
         goto cleanup_palette;
     }
     image->bpp = iheader.bpp;
     image->width = iheader.width;
     image->height = abs(iheader.height);
-    
+
     fseek(file, fheader.bof, SEEK_SET);
     fread(image->pixels, 1, image_size, file);
-    if (ferror(file)) {
+    if (ferror(file))
+    {
         perror("Error reading pixel data");
         goto cleanup_all;
     }
 
-    if (palette_entries == 0) {
+    if (palette_entries == 0)
+    {
         fprintf(stderr, "No palette found in BMP file\n");
         goto cleanup_all;
     }
 
     fseek(file, palette_offset, SEEK_SET);
     fread(image->palette, sizeof(BMPColorT), palette_entries, file);
-    if (ferror(file)) {
+    if (ferror(file))
+    {
         perror("Error reading palette data");
         goto cleanup_all;
     }
@@ -172,22 +210,96 @@ BmpImage* bmp_load(const char* filename) {
     fclose(file);
     return image;
 
-    cleanup_all:
-        free(image->pixels);
-        image->pixels = NULL;
-    cleanup_palette:
-        free(image->palette);
-        image->palette = NULL;
-    cleanup_image:
-        free(image);
-        image = NULL;
-    cleanup_file:
-        fclose(file);
-        return NULL;
+cleanup_all:
+    free(image->pixels);
+    image->pixels = NULL;
+cleanup_palette:
+    free(image->palette);
+    image->palette = NULL;
+cleanup_image:
+    free(image);
+    image = NULL;
+cleanup_file:
+    fclose(file);
+    return NULL;
 }
 
-void bmp_unload(BmpImage* image) {
-    if (image) {
+int bmp_save(const char *filename, const BmpImage *image)
+{
+    FILE *file = fopen(filename, "wb");
+    if (file == NULL)
+    {
+        perror("Error opening file for writing");
+        return -1;
+    }
+
+    BitmapFileHeader fheader = {0};
+    BitmapInfoHeader iheader = {0};
+
+    fheader.signature[0] = 'B';
+    fheader.signature[1] = 'M';
+    fheader.file_size = calculate_file_size(image);
+    fheader.bof = sizeof(BitmapFileHeader) + sizeof(BitmapInfoHeader) + (image->bpp <= 8 ? (1 << image->bpp) * sizeof(BMPColorT) : 0);
+    fheader.reserved[0] = 0;
+    fheader.reserved[1] = 0;
+    fheader.reserved[2] = 0;
+    fheader.reserved[3] = 0;
+    iheader.dib_header_size = sizeof(BitmapInfoHeader);
+    iheader.width = image->width;
+    iheader.height = image->height;
+    iheader.planes = 1;
+    iheader.bpp = image->bpp;
+    iheader.compression = 0;
+    iheader.image_size = 0;                                          // Set to 0 for uncompressed
+    iheader.h_resolution = 0;                                        // Set to 0 for default resolution
+    iheader.v_resolution = 0;                                        // Set to 0 for default resolution
+    iheader.colors_used = (image->bpp <= 8) ? (1 << image->bpp) : 0; // Set to 0 when no palette is used
+    iheader.important_colors = 0;                                    // Set to 0 for all colors
+    fwrite(&fheader, sizeof(BitmapFileHeader), 1, file);
+    if (ferror(file))
+    {
+        perror("Error writing file header");
+        fclose(file);
+        return -1;
+    }
+
+    fwrite(&iheader, sizeof(BitmapInfoHeader), 1, file);
+    if (ferror(file))
+    {
+        perror("Error writing info header");
+        fclose(file);
+        return -1;
+    }
+
+    if (image->bpp <= 8)
+    {
+        // the palette is init with calloc
+        fwrite(image->palette, sizeof(BMPColorT), (1 << image->bpp), file);
+        if (ferror(file))
+        {
+            perror("Error writing palette data");
+            fclose(file);
+            return -1;
+        }
+    }
+
+    uint32_t pixel_data_size = calculate_file_size(image) - fheader.bof;
+    fwrite(image->pixels, 1, pixel_data_size, file);
+    if (ferror(file))
+    {
+        perror("Error writing pixel data");
+        fclose(file);
+        return -1;
+    }
+
+    fclose(file);
+    return 0;
+}
+
+void bmp_unload(BmpImage *image)
+{
+    if (image)
+    {
         free(image->pixels);
         image->pixels = NULL;
         free(image->palette);
@@ -195,4 +307,3 @@ void bmp_unload(BmpImage* image) {
         free(image);
     }
 }
-
