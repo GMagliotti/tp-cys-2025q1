@@ -14,7 +14,7 @@
  *
  * @param s The seed value to initialize the generator with.
  */
-void set_seed(int64_t s);
+void ptable_set_seed(int64_t s);
 
 /**
  * @brief Generates the next pseudo-random character.
@@ -24,7 +24,7 @@ void set_seed(int64_t s);
  *
  * @return A pseudo-random 8-bit character.
  */
-uint8_t next_char(void);
+uint8_t ptable_next_char(void);
 
 /**
  * @brief Allocates and fills a table with pseudo-random characters.
@@ -39,5 +39,5 @@ uint8_t next_char(void);
  * @note The caller is responsible for freeing the allocated memory for
  *       the table when it is no longer needed.
  */
-uint8_t *get_rng_table(size_t size);
+uint8_t *ptable_get_rng_table(size_t size);
 #endif
