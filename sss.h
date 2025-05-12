@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-#include <permutation_table.h>
+#include "permutation_table.h"
 #include "bmp.h"
 
 /**
