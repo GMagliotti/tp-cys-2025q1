@@ -50,6 +50,22 @@ typedef struct BmpImageT {
 typedef struct BmpImageT BmpImage;
 
 /**
+ * @brief Creates a deep copy of an 8-bit BMP image.
+ *
+ * @param image Pointer to the source BmpImage to copy. Must be non-NULL, 8 bpp, and have valid
+ *              palette and pixel buffers.
+ *
+ * @return A pointer to the newly allocated BmpImage copy, or NULL if input is invalid or
+ *         memory allocation fails. This BmpImage meets the BMP format specifications.
+ *
+ * @note This function only supports 8-bit paletted BMP images. Other formats are rejected.
+ *       The caller is responsible for freeing the returned BmpImage and its associated buffers.
+ *
+ * @warning On allocation failure, NULL is returned and an error message is printed to stderr.
+ */
+BMPImageT *bmp_copy(BMPImageT *image);
+
+/**
  * @brief Loads a BMP image file to memory.
  * @param filename The name of the BMP file to open.
  * @return A pointer to a BmpImage structure containing the image data, or NULL on failure.

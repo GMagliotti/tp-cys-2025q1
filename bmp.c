@@ -123,6 +123,53 @@ uint32_t calculate_file_size(const BmpImage *image)
     return sizeof(BitmapFileHeader) + sizeof(BitmapInfoHeader) + palette_size + image_size;
 }
 
+BMPImageT *bmp_copy(BMPImageT *image)
+{
+    if (image == NULL || image->bpp != 8 || image->palette == NULL || image->pixels == NULL)
+    {
+        fprintf(stderr, "bmp_copy: Invalid image or unsupported format\n");
+        return NULL;
+    }
+
+    BmpImage *copy = malloc(sizeof(BmpImage));
+    if (copy == NULL)
+    {
+        fprintf(stderr, "bmp_copy: Error allocating memory for new image\n");
+        return NULL;
+    }
+
+    copy->width = image->width;
+    copy->height = image->height;
+    copy->bpp = image->bpp;
+
+    uint32_t palette_size = (image->bpp <= 8) ? ((1 << image->bpp) * sizeof(BMPColorT)) : 0;
+    copy->palette = malloc(palette_size);
+    if (copy->palette == NULL)
+    {
+        fprintf(stderr, "bmp_copy: Error allocating memory for palette copy\n");
+        free(copy);
+        return NULL;
+    }
+    memcpy(copy->palette, image->palette, palette_size);
+
+    uint32_t bytes_per_pixel = image->bpp / 8;
+    // Each scanline must be aligned to a 4-byte boundary as per BMP format
+    uint32_t bytes_per_scanline = (image->width * bytes_per_pixel + 3) & ~3; // Align to 4-byte boundary
+    uint32_t image_size = bytes_per_scanline * abs(image->height);
+
+    copy->pixels = malloc(image_size);
+    if (copy->pixels == NULL)
+    {
+        fprintf(stderr, "bmp_copy: Error allocating memory for data copy\n");
+        free(copy->palette);
+        free(copy);
+        return NULL;
+    }
+    memcpy(copy->pixels, image->pixels, image_size);
+
+    return copy;
+}
+
 BmpImage *bmp_load(const char *filename)
 {
     FILE *file = fopen(filename, "rb");
