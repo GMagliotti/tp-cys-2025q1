@@ -39,5 +39,7 @@ uint8_t ptable_next_char(void);
  * @note The caller is responsible for freeing the allocated memory for
  *       the table when it is no longer needed.
  */
-uint8_t *ptable_get_rng_table(size_t size);
+uint8_t *ptable_get_rng_table_unaligned(size_t size);
+
+uint8_t *ptable_get_rng_table_4bytealigned(int width, int height);
 #endif
