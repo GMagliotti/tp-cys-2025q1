@@ -76,7 +76,6 @@ BMPImageT *bmp_copy(BMPImageT *image);
  */
 static inline void *bmp_get_pixel(const BMPImageT *image, int32_t x, int32_t y);
 
-
 /**
  * @brief Loads a BMP image file to memory.
  * @param filename The name of the BMP file to open.
