@@ -66,6 +66,18 @@ typedef struct BmpImageT BmpImage;
 BMPImageT *bmp_copy(BMPImageT *image);
 
 /**
+ * @brief Get the address of a pixel in the image, considering BMP format spec.
+ * @param image The image to get the pixel from.
+ * @param x The x coordinate of the pixel.
+ * @param y The y coordinate of the pixel.
+ * @return A pointer to the pixel data.
+ * @warning For performance reasons, this function does not check if the coordinates are valid.
+ *         It is the caller's responsibility to ensure that the coordinates are within the image bounds.
+ */
+static inline void *bmp_get_pixel(const BMPImageT *image, int32_t x, int32_t y);
+
+
+/**
  * @brief Loads a BMP image file to memory.
  * @param filename The name of the BMP file to open.
  * @return A pointer to a BmpImage structure containing the image data, or NULL on failure.
