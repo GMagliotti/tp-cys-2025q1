@@ -1,4 +1,148 @@
 #include "sss_algos.h"
+#include <assert.h>
+
+#define PRIME_MODULUS 257
+#define MAX_K 10
+#define MIN_K 2
+#define MIN_N 2
+
+bool hide_shadow_lsb_from_buffer(const uint8_t *shadow_data, size_t shadow_len, BMPImageT *cover)
+{
+    if (!shadow_data || !cover || !cover->pixels)
+        return false;
+
+    // Each byte in the shadow buffer needs 8 bits (LSBs in the cover)
+    size_t bits_needed = shadow_len * 8;
+
+    uint32_t width_bytes = cover->width * cover->bpp / 8;
+    uint32_t padded_width_bytes = (width_bytes % 4 == 0) ? width_bytes : (width_bytes + (4 - (width_bytes % 4)));
+    size_t cover_capacity = padded_width_bytes * cover->height;
+
+    if (cover_capacity < bits_needed) {
+        fprintf(stderr, "Cover image too small to hide shadow data\n");
+        return false;
+    }
+
+    uint8_t *cover_data = cover->pixels;
+
+    size_t shadow_byte_index = 0;
+    uint8_t current_byte = shadow_data[shadow_byte_index];
+    int bit_index = 7; // Start from MSB
+
+    for (size_t i = 0; i < cover_capacity && shadow_byte_index < shadow_len; ++i)
+    {
+        // Clear LSB of cover byte
+        cover_data[i] &= 0xFE;
+
+        // Insert current bit from shadow
+        uint8_t bit = (current_byte >> bit_index) & 0x01;
+        cover_data[i] |= bit;
+
+        bit_index--;
+        if (bit_index < 0) {
+            bit_index = 7;
+            shadow_byte_index++;
+            if (shadow_byte_index < shadow_len) {
+                current_byte = shadow_data[shadow_byte_index];
+            }
+        }
+    }
+
+    return true;
+}
+
+// Polynomial evaluation (mod 257)
+static inline uint16_t poly_eval(const uint8_t *coeffs, int r, uint16_t x)
+{
+    uint16_t result = 0;
+    uint16_t power = 1;
+    for (int i = 0; i < r; ++i)
+    {
+        result = (result + coeffs[i] * power) % PRIME_MODULUS;
+        power = (power * x) % PRIME_MODULUS;
+    }
+    return result;
+}
+
+bool sss_distribute_share_image(const BMPImageT *Q, BMPImageT **shadows, int k, int n, uint8_t **shadow_data)
+{
+    if (!Q || !Q->pixels || !shadows)
+    {
+        fprintf(stderr, "Invalid input: Q or shadows is NULL\n");
+        return false;
+    }
+
+    if (k < MIN_K || k > MAX_K)
+    {
+        fprintf(stderr, "Invalid parameters: k must be between 2 and 10\n");
+        return false;
+    }
+
+    if (n < MIN_N || n < k)
+    {
+        fprintf(stderr, "Invalid parameters: n must be greater than 1, and k must be smaller than n\n");
+        return false;
+    }
+
+    uint32_t total_pixels = Q->width * Q->height;
+    uint8_t coeffs[MAX_K] = {0};
+    int sections = total_pixels / k;
+    int remaining = total_pixels % k;
+
+    for (int section = 0; section < sections; ++section)
+    {
+        // Step 3: Extract r coefficients from Q (r consecutive pixels)
+        for (int i = 0; i < k; ++i)
+        {
+            int index = section * k + i;
+            int x = index % Q->width;
+            int y = index / Q->width;
+            coeffs[i] = *(uint8_t *)bmp_get_pixel_address(Q, x, y);
+        }
+
+        // Step 5: Retry if any fj(x) == 256
+        bool valid;
+        do
+        {
+            valid = true;
+            for (int i = 0; i < n; ++i)
+            {
+                uint16_t fx = poly_eval(coeffs, k, i + 1);
+                if (fx == 256)
+                {
+                    // decrease first non-zero coeff
+                    for (int j = 0; j < k; ++j)
+                    {
+                        if (coeffs[j] != 0)
+                        {
+                            coeffs[j] = (coeffs[j] - 1) % 256;
+                            break;
+                        }
+                    }
+                    valid = false;
+                    break;
+                }
+            }
+        } while (!valid);
+
+        // Step 4/6: Assign one pixel to each shadow image
+        for (int i = 0; i < n; ++i)
+        {
+            uint16_t fx = poly_eval(coeffs, k, i + 1);
+            assert(fx <= 255); // BMP can't store 256, ensure fix worked
+
+            int shadow_index = section; // each section becomes 1 pixel in shadow image
+            int x = shadow_index % shadows[i]->width;
+            int y = shadow_index / shadows[i]->width;
+            shadow_data[i] = malloc(sections * sizeof(uint8_t));
+            uint8_t *px = (uint8_t *)bmp_get_pixel_address(shadows[i], x, y);
+            shadow_data[i][section] = (uint8_t)fx;
+            *px = (uint8_t)fx;
+        }
+    }
+
+    return true;
+}
 
 /**
  * @brief Applies an in-place XOR operation between the image pixel data and a pseudo-random table.
@@ -84,6 +228,12 @@ BMPImageT **sss_distribute_generate_shadows_buffers(BMPImageT *image, uint32_t k
             fprintf(stderr, "Out of memory: Failed to allocate shadow image\n");
             goto error_oom;
         }
+
+        // uncomment when palette copies are implemented
+        // shadows[i]->palette = calloc((1 << image->bpp), sizeof(BMPColorT));
+        size_t row_size = (image->width * image->bpp + 7) / 8;
+        size_t padded_row_size = (row_size + 3) & ~3; // Align to 4 bytes
+        shadows[i]->pixels = calloc(padded_row_size * image->height, 1);
     }
 
     return shadows;
@@ -104,7 +254,44 @@ error_oom:
 BMPImageT **sss_distribute_8(BMPImageT *image, uint32_t k, uint32_t n)
 {
     sss_distribute_initial_xor_inplace(image, NULL);
-    BMPImageT **shadows = sss_distribute_generate_shadows_buffer(image, k, n);
+    BMPImageT **shadows = sss_distribute_generate_shadows_buffers(image, k, n);
+    for (int i = 0; i < n; i++)
+    {
+        shadows[i]->bpp = image->bpp;
+        shadows[i]->width = image->width;
+        shadows[i]->height = image->height;
+        shadows[i]->palette = image->palette; // TODO double free will be fixed later
+    }
+    uint8_t *shadow_data[256] = {0};
+    if (sss_distribute_share_image(image, shadows, k, n, shadow_data) == false)
+    {
+        fprintf(stderr, "Failed to distribute image\n");
+        exit(EXIT_FAILURE);
+    }
+
+    for (int i = 0; i < n; i++)
+    {
+        BMPImageT *cover = bmp_load("cover.bmp"); // or generate it if it's fixed size
+        if (!cover)
+        {
+            fprintf(stderr, "Failed to load cover image for shadow %d\n", i);
+            exit(EXIT_FAILURE);
+        }
+
+        int size = shadows[i]->width * shadows[i]->height / k;
+        bool ok = hide_shadow_lsb_from_buffer(shadow_data[i], size, cover);
+        if (!ok)
+        {
+            fprintf(stderr, "Failed to hide shadow %d in cover image\n", i);
+            exit(EXIT_FAILURE);
+        }
+
+        char filename[256];
+        snprintf(filename, sizeof(filename), "stego%d.bmp", i);
+        bmp_save(filename, cover);
+        bmp_unload(cover);
+    }
+    return shadows;
 }
 
 BMPImageT **sss_distribute_generic(BMPImageT *image, uint32_t k, uint32_t n)

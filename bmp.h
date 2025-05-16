@@ -29,6 +29,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #pragma pack(push, 1)
 typedef struct {
@@ -74,7 +75,11 @@ BMPImageT *bmp_copy(BMPImageT *image);
  * @warning For performance reasons, this function does not check if the coordinates are valid.
  *         It is the caller's responsibility to ensure that the coordinates are within the image bounds.
  */
-static inline void *bmp_get_pixel(const BMPImageT *image, int32_t x, int32_t y);
+static inline void *bmp_get_pixel_address(const BMPImageT *image, int32_t x, int32_t y)
+{
+    int padw_b = ((image->width)*(image->bpp)/8 + 3) & ~3;
+    return ((uint8_t *)image->pixels) + (y * padw_b) + x * (image->bpp / 8);
+}
 
 /**
  * @brief Loads a BMP image file to memory.

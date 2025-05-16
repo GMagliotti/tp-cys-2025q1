@@ -170,12 +170,6 @@ BMPImageT *bmp_copy(BMPImageT *image)
     return copy;
 }
 
-static inline void *bmp_get_pixel(const BMPImageT *image, int32_t x, int32_t y) 
-{
-    int padw_b = ((image->width)*(image->bpp)/8 + 3) & ~3;
-    return ((uint8_t *)image->pixels) + (y * padw_b) + x * (image->bpp / 8);
-}
-
 BmpImage *bmp_load(const char *filename)
 {
     FILE *file = fopen(filename, "rb");
