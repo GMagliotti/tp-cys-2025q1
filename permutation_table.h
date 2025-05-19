@@ -17,6 +17,12 @@
 void ptable_set_seed(int64_t s);
 
 /**
+ * @brief Retrieves the current seed value
+*/
+uint16_t ptable_get_seed(void);
+
+
+/**
  * @brief Generates the next pseudo-random character.
  *
  * Returns the next character from the pseudo-random sequence.
