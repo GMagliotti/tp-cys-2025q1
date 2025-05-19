@@ -14,13 +14,7 @@
  *
  * @param s The seed value to initialize the generator with.
  */
-void ptable_set_seed(int64_t s);
-
-/**
- * @brief Retrieves the current seed value
-*/
-uint16_t ptable_get_seed(void);
-
+void ptable_set_seed(uint16_t s);
 
 /**
  * @brief Generates the next pseudo-random character.
@@ -38,6 +32,7 @@ uint8_t ptable_next_char(void);
  * The output is influenced by the previously set seed value.
  * 
  * @param size The number of characters to generate and fill in the table.
+ * @param seed_ptr Pointer to a 16-bit seed value. If NULL, the default seed is used.
  * 
  * @return A pointer to the allocated table filled with random characters,
  *         or NULL if memory allocation fails.
@@ -47,5 +42,5 @@ uint8_t ptable_next_char(void);
  */
 uint8_t *ptable_get_rng_table_unaligned(size_t size);
 
-uint8_t *ptable_get_rng_table_4bytealigned(int width, int height);
+uint8_t *ptable_get_rng_table_4bytealigned(int width, int height, uint16_t seed_ptr);
 #endif

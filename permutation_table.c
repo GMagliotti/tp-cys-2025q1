@@ -1,15 +1,15 @@
 #include "permutation_table.h"
 
-static int16_t seed_gen = 0L;
+static uint16_t seed_gen = 0L;
 static int64_t seed = 0L;
 
-void ptable_set_seed(int64_t s)
+void ptable_set_seed(uint16_t s)
 {
     seed_gen = s;
     seed = (s ^ 0x5DEECE66DL) & ((1LL << 48) - 1);
 }
 
-int16_t ptable_get_seed(void)
+uint16_t ptable_get_seed(void)
 {
     // Could do s ^ 0x5DEECE66DL
     return seed_gen;
@@ -40,8 +40,7 @@ uint8_t *ptable_get_rng_table_unaligned(size_t size) {
     return table;
 }
 
-uint8_t *ptable_get_rng_table_4bytealigned(int width, int height) {
-    int64_t seed = 0L;
+uint8_t *ptable_get_rng_table_4bytealigned(int width, int height, uint16_t seed) {
     uint32_t padwidth = (width % 4 == 0) ? width : (width + (4 - (width % 4)));
     uint32_t padsize = padwidth * height;
     uint8_t *table = malloc(padsize * sizeof(uint8_t));

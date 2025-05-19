@@ -92,9 +92,12 @@ BmpImage *bmp_load(const char *filename);
  * @brief Save a BMP image to a file.
  * @param filename The name of the file to save the BMP image to.
  * @param image A pointer to the BmpImage structure containing the image data. Must be constant.
+ * @param secret A pointer to a 4 byte buffer to -- the reserved bytes.
+ *               If null, the reserved bytes are set to to the standard.
+ *               This is non standard, and might cause issues with some BMP readers.
  * @return 0 on success, -1 on failure.
  */
-int bmp_save(const char *filename, const BmpImage *image);
+int bmp_save(const char *filename, const BmpImage *image, char *res);
 
 /**
  * @brief Frees the memory allocated for a BMP image.

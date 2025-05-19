@@ -271,7 +271,7 @@ cleanup_file:
     return NULL;
 }
 
-int bmp_save(const char *filename, const BmpImage *image)
+int bmp_save(const char *filename, const BmpImage *image, char *res)
 {
     FILE *file = fopen(filename, "wb");
     if (file == NULL)
@@ -280,6 +280,8 @@ int bmp_save(const char *filename, const BmpImage *image)
         return -1;
     }
 
+    if (res != NULL) printf("Saving image with secret.\n"); 
+
     BitmapFileHeader fheader = {0};
     BitmapInfoHeader iheader = {0};
 
@@ -287,10 +289,10 @@ int bmp_save(const char *filename, const BmpImage *image)
     fheader.signature[1] = 'M';
     fheader.file_size = calculate_file_size(image);
     fheader.bof = sizeof(BitmapFileHeader) + sizeof(BitmapInfoHeader) + (image->bpp <= 8 ? (1 << image->bpp) * sizeof(BMPColorT) : 0);
-    fheader.reserved[0] = 0;
-    fheader.reserved[1] = 0;
-    fheader.reserved[2] = 0;
-    fheader.reserved[3] = 0;
+    fheader.reserved[0] = res == NULL ? 0 : res[0];
+    fheader.reserved[1] = res == NULL ? 0 : res[1];
+    fheader.reserved[2] = res == NULL ? 0 : res[2];
+    fheader.reserved[3] = res == NULL ? 0 : res[3];
     iheader.dib_header_size = sizeof(BitmapInfoHeader);
     iheader.width = image->width;
     iheader.height = image->height;

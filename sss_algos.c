@@ -6,7 +6,7 @@
 #define MIN_K 2
 #define MIN_N 2
 
-bool hide_shadow_lsb_from_buffer(const uint8_t *shadow_data, size_t shadow_len, BMPImageT *cover)
+bool hide_shadow_lsb_from_buffer(const uint8_t *shadow_data, size_t shadow_len, BMPImageT *cover, uint16_t seed, int shadow_index)
 {
     if (!shadow_data || !cover || !cover->pixels)
         return false;
@@ -155,6 +155,7 @@ bool sss_distribute_share_image(const BMPImageT *Q, BMPImageT **shadows, int k, 
  *              The image is modified in-place.
  * @param store If not NULL, this address will store the address where the random table was created.
  *              If NULL, the random table will be discarded after use.
+ * @param seed The seed value used to generate the random table. This can be used for reproducibility.
  *
  * @return A pointer to the same BMPImageT structure, with the pixels XORed with the random table.
  *
@@ -163,13 +164,17 @@ bool sss_distribute_share_image(const BMPImageT *Q, BMPImageT **shadows, int k, 
  *
  * @warning This function will exit the program with an error message if memory allocation fails.
  */
-BMPImageT *sss_distribute_initial_xor_inplace(BMPImageT *image, uint8_t **store)
+BMPImageT *sss_distribute_initial_xor_inplace(BMPImageT *image, uint8_t **store, uint16_t seed)
 {
-    uint8_t *randtable = ptable_get_rng_table_4bytealigned(image->width, image->height);
+    uint8_t *randtable = ptable_get_rng_table_4bytealigned(image->width, image->height, seed);
     if (randtable == NULL || image == NULL)
     {
         fprintf(stderr, "Out of memory: Failed to distribute image\n");
         exit(EXIT_FAILURE);
+    }
+    if (store != NULL)
+    {
+        *store = randtable;
     }
 
     uint32_t width_bytes = image->width * image->bpp / 8;
@@ -253,7 +258,8 @@ error_oom:
 
 BMPImageT **sss_distribute_8(BMPImageT *image, uint32_t k, uint32_t n)
 {
-    sss_distribute_initial_xor_inplace(image, NULL);
+    uint16_t seed = rand() % 65536;
+    sss_distribute_initial_xor_inplace(image, NULL, seed);
     BMPImageT **shadows = sss_distribute_generate_shadows_buffers(image, k, n);
     for (int i = 0; i < n; i++)
     {
@@ -279,16 +285,17 @@ BMPImageT **sss_distribute_8(BMPImageT *image, uint32_t k, uint32_t n)
         }
 
         int size = shadows[i]->width * shadows[i]->height / k;
-        bool ok = hide_shadow_lsb_from_buffer(shadow_data[i], size, cover);
+        bool ok = hide_shadow_lsb_from_buffer(shadow_data[i], size, cover, seed, i);
         if (!ok)
         {
             fprintf(stderr, "Failed to hide shadow %d in cover image\n", i);
             exit(EXIT_FAILURE);
         }
 
+        char res[4] = { seed & 0xFF, (seed >> 8) & 0xFF, i & 0xFF, (i >> 8) & 0xFF };
         char filename[256];
         snprintf(filename, sizeof(filename), "stego%d.bmp", i);
-        bmp_save(filename, cover);
+        bmp_save(filename, cover, res);
         bmp_unload(cover);
     }
     return shadows;
@@ -302,8 +309,7 @@ BMPImageT **sss_distribute_generic(BMPImageT *image, uint32_t k, uint32_t n)
 
 BMPImageT *sss_recover_8(BMPImageT **shadows, uint32_t k)
 {
-    fprintf(stderr, "sss_recover_8 not implemented\n");
-    return NULL;
+    
 }
 
 BMPImageT *sss_recover_generic(BMPImageT **shadows, uint32_t k)
