@@ -45,6 +45,7 @@ typedef struct BmpImageT {
     uint16_t bpp;
     BMPColorT* palette;
     void* pixels;
+    uint8_t *reserved; // 4
 } BMPImageT;
 #pragma pack(pop)
 
@@ -97,7 +98,7 @@ BmpImage *bmp_load(const char *filename);
  *               This is non standard, and might cause issues with some BMP readers.
  * @return 0 on success, -1 on failure.
  */
-int bmp_save(const char *filename, const BmpImage *image, char *res);
+int bmp_save(const char *filename, const BmpImage *image);
 
 /**
  * @brief Frees the memory allocated for a BMP image.

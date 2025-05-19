@@ -1,4 +1,5 @@
 #include "bmp.h"
+#define CHECK_HEADER_RESERVED(a, b, c, d) (a == 0 && b == 0 && c == 0 && d == 0)
 
 #pragma pack(push, 1)
 typedef struct
@@ -214,7 +215,11 @@ BmpImage *bmp_load(const char *filename)
     uint32_t palette_offset = sizeof(BitmapFileHeader) + iheader.dib_header_size;
     uint32_t bytes_per_scanline = (iheader.bpp * iheader.width + 31) / 32 * 4;
     uint32_t image_size = bytes_per_scanline * abs(iheader.height);
-
+    image->reserved = malloc(4);
+    if (image->reserved == NULL)
+    {
+        goto cleanup_reserved;
+    }
     image->palette = calloc(palette_entries, sizeof(*image->palette));
     if (image->palette == NULL)
     {
@@ -232,6 +237,13 @@ BmpImage *bmp_load(const char *filename)
     image->width = iheader.width;
     image->height = abs(iheader.height);
 
+    fseek(file, 6, SEEK_SET);
+    fread(image->reserved, 1, 4, file);
+    if (ferror(file))
+    {
+        perror("Error reading reserved bytes in header");
+        goto cleanup_all;
+    }
     fseek(file, fheader.bof, SEEK_SET);
     fread(image->pixels, 1, image_size, file);
     if (ferror(file))
@@ -263,6 +275,9 @@ cleanup_all:
 cleanup_palette:
     free(image->palette);
     image->palette = NULL;
+cleanup_reserved:
+    free(image->reserved);
+    image->reserved = NULL;
 cleanup_image:
     free(image);
     image = NULL;
@@ -271,7 +286,7 @@ cleanup_file:
     return NULL;
 }
 
-int bmp_save(const char *filename, const BmpImage *image, char *res)
+int bmp_save(const char *filename, const BmpImage *image)
 {
     FILE *file = fopen(filename, "wb");
     if (file == NULL)
@@ -280,7 +295,9 @@ int bmp_save(const char *filename, const BmpImage *image, char *res)
         return -1;
     }
 
-    if (res != NULL) printf("Saving image with secret.\n"); 
+    const uint8_t *res = image->reserved; 
+    if (!CHECK_HEADER_RESERVED(res[0], res[1], res[2], res[3]))
+        printf("Saving non-standard image with modified reserved bytes.\n");
 
     BitmapFileHeader fheader = {0};
     BitmapInfoHeader iheader = {0};
@@ -289,10 +306,10 @@ int bmp_save(const char *filename, const BmpImage *image, char *res)
     fheader.signature[1] = 'M';
     fheader.file_size = calculate_file_size(image);
     fheader.bof = sizeof(BitmapFileHeader) + sizeof(BitmapInfoHeader) + (image->bpp <= 8 ? (1 << image->bpp) * sizeof(BMPColorT) : 0);
-    fheader.reserved[0] = res == NULL ? 0 : res[0];
-    fheader.reserved[1] = res == NULL ? 0 : res[1];
-    fheader.reserved[2] = res == NULL ? 0 : res[2];
-    fheader.reserved[3] = res == NULL ? 0 : res[3];
+    fheader.reserved[0] = image->reserved[0];
+    fheader.reserved[1] = image->reserved[1];
+    fheader.reserved[2] = image->reserved[2];
+    fheader.reserved[3] = image->reserved[3];
     iheader.dib_header_size = sizeof(BitmapInfoHeader);
     iheader.width = image->width;
     iheader.height = image->height;
@@ -349,6 +366,8 @@ void bmp_unload(BmpImage *image)
 {
     if (image)
     {
+        free(image->reserved);
+        image->reserved = NULL;
         free(image->pixels);
         image->pixels = NULL;
         free(image->palette);
@@ -356,3 +375,5 @@ void bmp_unload(BmpImage *image)
         free(image);
     }
 }
+
+#undef CHECK_HEADER_RESERVED

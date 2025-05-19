@@ -18,7 +18,8 @@ bool hide_shadow_lsb_from_buffer(const uint8_t *shadow_data, size_t shadow_len, 
     uint32_t padded_width_bytes = (width_bytes % 4 == 0) ? width_bytes : (width_bytes + (4 - (width_bytes % 4)));
     size_t cover_capacity = padded_width_bytes * cover->height;
 
-    if (cover_capacity < bits_needed) {
+    if (cover_capacity < bits_needed)
+    {
         fprintf(stderr, "Cover image too small to hide shadow data\n");
         return false;
     }
@@ -39,10 +40,12 @@ bool hide_shadow_lsb_from_buffer(const uint8_t *shadow_data, size_t shadow_len, 
         cover_data[i] |= bit;
 
         bit_index--;
-        if (bit_index < 0) {
+        if (bit_index < 0)
+        {
             bit_index = 7;
             shadow_byte_index++;
-            if (shadow_byte_index < shadow_len) {
+            if (shadow_byte_index < shadow_len)
+            {
                 current_byte = shadow_data[shadow_byte_index];
             }
         }
@@ -292,10 +295,14 @@ BMPImageT **sss_distribute_8(BMPImageT *image, uint32_t k, uint32_t n)
             exit(EXIT_FAILURE);
         }
 
-        char res[4] = { seed & 0xFF, (seed >> 8) & 0xFF, i & 0xFF, (i >> 8) & 0xFF };
+        uint16_t x = i+1;
+        cover->reserved[0] = seed & 0xFF;
+        cover->reserved[1] = (seed >> 8) & 0xFF;
+        cover->reserved[2] = x & 0xFF;
+        cover->reserved[3] = (x >> 8) & 0xFF;
         char filename[256];
         snprintf(filename, sizeof(filename), "stego%d.bmp", i);
-        bmp_save(filename, cover, res);
+        bmp_save(filename, cover);
         bmp_unload(cover);
     }
     return shadows;
@@ -307,9 +314,141 @@ BMPImageT **sss_distribute_generic(BMPImageT *image, uint32_t k, uint32_t n)
     return NULL;
 }
 
+// Extended Euclidean Algorithm for inverse mod 257
+uint16_t modinv(int a, int p) {
+    int t = 0, newt = 1;
+    int r = p, newr = a;
+    while (newr != 0) {
+        int quotient = r / newr;
+        int tmp = newt;
+        newt = t - quotient * newt;
+        t = tmp;
+        tmp = newr;
+        newr = r - quotient * newr;
+        r = tmp;
+    }
+    if (r > 1) return 0;  // Not invertible
+    if (t < 0) t += p;
+    return (uint16_t)t;
+}
+
+uint8_t lagrange_reconstruct_pixel(uint8_t *y, uint16_t *x, int k) {
+    int sum = 0;
+
+    for (int i = 0; i < k; i++) {
+        int numerator = 1;
+        int denominator = 1;
+
+        for (int j = 0; j < k; j++) {
+            if (j == i) continue;
+
+            int xj = x[j];
+            int xi = x[i];
+
+            numerator = (numerator * (PRIME_MODULUS - xj)) % PRIME_MODULUS;      // -xj mod 257
+            int diff = (xi - xj + PRIME_MODULUS) % PRIME_MODULUS;
+            denominator = (denominator * diff) % PRIME_MODULUS;
+        }
+
+        int li = (numerator * modinv(denominator, PRIME_MODULUS)) % PRIME_MODULUS;
+        sum = (sum + li * y[i]) % PRIME_MODULUS;
+    }
+
+    return (uint8_t)sum;
+}
+
+
+bool extract_shadow_lsb_to_buffer(uint8_t *out_shadow_data, size_t shadow_len, const BMPImageT *cover)
+{
+    if (!out_shadow_data || !cover || !cover->pixels)
+        return false;
+
+    size_t bits_needed = shadow_len * 8;
+
+    uint32_t width_bytes = cover->width * cover->bpp / 8;
+    uint32_t padded_width_bytes = (width_bytes % 4 == 0) ? width_bytes : (width_bytes + (4 - (width_bytes % 4)));
+    size_t cover_capacity = padded_width_bytes * cover->height;
+
+    if (cover_capacity < bits_needed)
+    {
+        fprintf(stderr, "Cover image too small to extract shadow data\n");
+        return false;
+    }
+
+    const uint8_t *cover_data = cover->pixels;
+
+    size_t shadow_byte_index = 0;
+    uint8_t current_byte = 0;
+    int bit_index = 7; // Start from MSB
+
+    for (size_t i = 0; i < cover_capacity && shadow_byte_index < shadow_len; ++i)
+    {
+        uint8_t bit = cover_data[i] & 0x01;
+        current_byte |= (bit << bit_index);
+
+        bit_index--;
+        if (bit_index < 0)
+        {
+            out_shadow_data[shadow_byte_index] = current_byte;
+            current_byte = 0;
+            bit_index = 7;
+            shadow_byte_index++;
+        }
+    }
+
+    return true;
+}
+
 BMPImageT *sss_recover_8(BMPImageT **shadows, uint32_t k)
 {
-    
+    if (k < MIN_K || k > MAX_K)
+    {
+        fprintf(stderr, "Invalid parameters: k must be between 2 and 10\n");
+        return NULL;
+    }
+
+    uint16_t seed = 0;
+    bool flag = true, set = false, error = false;
+    int i = 0;
+    while (flag)
+    {
+        if (shadows[i] != NULL)
+        {
+            i++;
+        }
+
+        if (!set)
+        {
+            seed = shadows[i]->reserved[0] | (shadows[i]->reserved[1] << 8);
+            set = true;
+        }
+        else if (seed != (shadows[i]->reserved[0] | (shadows[i]->reserved[1] << 8) ) )
+        {
+            fprintf(stderr, "Error: shadows have different seeds\n");
+            error = true;
+            break;
+        }
+    }
+
+    if (error)
+    {
+        fprintf(stderr, "Error: shadows are not valid\n");
+        return NULL;
+    }
+    if (i < k)
+    {
+        fprintf(stderr, "Not enough shadows to recover the image\n");
+        return NULL;
+    }
+
+    uint8_t **shadow_array = malloc(k * sizeof(uint8_t *));
+    uint16_t *x_array = malloc(k * sizeof(uint16_t));
+    for (int i = 0; shadows[i] != NULL; i++) {
+        int shadow_len = shadows[0]->width * shadows[0]->height;
+        shadow_array[i] = malloc(shadow_len);
+        extract_shadow_lsb_to_buffer(shadow_array[i], shadow_len, shadows[i]);
+        x_array[i] = shadows[i]->reserved[2] | (shadows[i]->reserved[3] << 8);
+    }
 }
 
 BMPImageT *sss_recover_generic(BMPImageT **shadows, uint32_t k)
