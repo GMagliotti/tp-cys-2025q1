@@ -128,19 +128,29 @@ bool sss_distribute_share_image(const BMPImageT *Q, BMPImageT **shadows, int k, 
             }
         } while (!valid);
 
-        // Step 4/6: Assign one pixel to each shadow image
+        // ✅ Allocate buffers once before the section loop
+        for (int i = 0; i < n; ++i)
+        {
+            shadow_data[i] = malloc(sections * sizeof(uint8_t));
+            if (!shadow_data[i])
+            {
+                fprintf(stderr, "Out of memory allocating shadow_data[%d]\n", i);
+                return false;
+            }
+        }
+
+        // For each section:
         for (int i = 0; i < n; ++i)
         {
             uint16_t fx = poly_eval(coeffs, k, i + 1);
-            assert(fx <= 255); // BMP can't store 256, ensure fix worked
+            assert(fx <= 255);
 
-            int shadow_index = section; // each section becomes 1 pixel in shadow image
-            int x = shadow_index % shadows[i]->width;
-            int y = shadow_index / shadows[i]->width;
-            shadow_data[i] = malloc(sections * sizeof(uint8_t));
+            int x = section % shadows[i]->width;
+            int y = section / shadows[i]->width;
             uint8_t *px = (uint8_t *)bmp_get_pixel_address(shadows[i], x, y);
-            shadow_data[i][section] = (uint8_t)fx;
             *px = (uint8_t)fx;
+
+            shadow_data[i][section] = (uint8_t)fx;
         }
     }
 
@@ -295,7 +305,7 @@ BMPImageT **sss_distribute_8(BMPImageT *image, uint32_t k, uint32_t n)
             exit(EXIT_FAILURE);
         }
 
-        uint16_t x = i+1;
+        uint16_t x = i + 1;
         cover->reserved[0] = seed & 0xFF;
         cover->reserved[1] = (seed >> 8) & 0xFF;
         cover->reserved[2] = x & 0xFF;
@@ -315,10 +325,12 @@ BMPImageT **sss_distribute_generic(BMPImageT *image, uint32_t k, uint32_t n)
 }
 
 // Extended Euclidean Algorithm for inverse mod 257
-uint16_t modinv(int a, int p) {
+uint16_t modinv(int a, int p)
+{
     int t = 0, newt = 1;
     int r = p, newr = a;
-    while (newr != 0) {
+    while (newr != 0)
+    {
         int quotient = r / newr;
         int tmp = newt;
         newt = t - quotient * newt;
@@ -327,25 +339,31 @@ uint16_t modinv(int a, int p) {
         newr = r - quotient * newr;
         r = tmp;
     }
-    if (r > 1) return 0;  // Not invertible
-    if (t < 0) t += p;
+    if (r > 1)
+        return 0; // Not invertible
+    if (t < 0)
+        t += p;
     return (uint16_t)t;
 }
 
-uint8_t lagrange_reconstruct_pixel(uint8_t *y, uint16_t *x, int k) {
+uint8_t lagrange_reconstruct_pixel(uint8_t *y, uint16_t *x, int k)
+{
     int sum = 0;
 
-    for (int i = 0; i < k; i++) {
+    for (int i = 0; i < k; i++)
+    {
         int numerator = 1;
         int denominator = 1;
 
-        for (int j = 0; j < k; j++) {
-            if (j == i) continue;
+        for (int j = 0; j < k; j++)
+        {
+            if (j == i)
+                continue;
 
             int xj = x[j];
             int xi = x[i];
 
-            numerator = (numerator * (PRIME_MODULUS - xj)) % PRIME_MODULUS;      // -xj mod 257
+            numerator = (numerator * (PRIME_MODULUS - xj)) % PRIME_MODULUS; // -xj mod 257
             int diff = (xi - xj + PRIME_MODULUS) % PRIME_MODULUS;
             denominator = (denominator * diff) % PRIME_MODULUS;
         }
@@ -356,7 +374,6 @@ uint8_t lagrange_reconstruct_pixel(uint8_t *y, uint16_t *x, int k) {
 
     return (uint8_t)sum;
 }
-
 
 bool extract_shadow_lsb_to_buffer(uint8_t *out_shadow_data, size_t shadow_len, const BMPImageT *cover)
 {
@@ -407,48 +424,93 @@ BMPImageT *sss_recover_8(BMPImageT **shadows, uint32_t k)
         return NULL;
     }
 
-    uint16_t seed = 0;
+    uint16_t seed = shadows[0]->reserved[0] | (shadows[0]->reserved[1] << 8);
     bool flag = true, set = false, error = false;
     int i = 0;
-    while (flag)
-    {
-        if (shadows[i] != NULL)
-        {
-            i++;
-        }
+    // while (flag)
+    // {
+    //     if (shadows[i] != NULL)
+    //     {
+    //         i++;
+    //     }
 
-        if (!set)
-        {
-            seed = shadows[i]->reserved[0] | (shadows[i]->reserved[1] << 8);
-            set = true;
-        }
-        else if (seed != (shadows[i]->reserved[0] | (shadows[i]->reserved[1] << 8) ) )
-        {
-            fprintf(stderr, "Error: shadows have different seeds\n");
-            error = true;
-            break;
-        }
-    }
+    //     if (!set)
+    //     {
+    //         seed = shadows[i]->reserved[0] | (shadows[i]->reserved[1] << 8);
+    //         set = true;
+    //     }
+    //     else if (seed != (shadows[i]->reserved[0] | (shadows[i]->reserved[1] << 8)))
+    //     {
+    //         fprintf(stderr, "Error: shadows have different seeds\n");
+    //         error = true;
+    //     }
+    // }
 
     if (error)
     {
         fprintf(stderr, "Error: shadows are not valid\n");
         return NULL;
     }
-    if (i < k)
-    {
-        fprintf(stderr, "Not enough shadows to recover the image\n");
-        return NULL;
-    }
+    // if (i < k)
+    // {
+    //     fprintf(stderr, "Not enough shadows to recover the image\n");
+    //     return NULL;
+    // }
 
     uint8_t **shadow_array = malloc(k * sizeof(uint8_t *));
     uint16_t *x_array = malloc(k * sizeof(uint16_t));
-    for (int i = 0; shadows[i] != NULL; i++) {
-        int shadow_len = shadows[0]->width * shadows[0]->height;
+    int shadow_len = shadows[0]->width * shadows[0]->height / k;
+    for (int i = 0; shadows[i] != NULL; i++)
+    {
         shadow_array[i] = malloc(shadow_len);
         extract_shadow_lsb_to_buffer(shadow_array[i], shadow_len, shadows[i]);
         x_array[i] = shadows[i]->reserved[2] | (shadows[i]->reserved[3] << 8);
     }
+
+    // modularize
+    BMPImageT *recovered_image = malloc(sizeof(BMPImageT));
+    recovered_image->palette = shadows[0]->palette;
+    recovered_image->width = shadows[0]->width;
+    recovered_image->height = shadows[0]->height;
+    recovered_image->bpp = shadows[0]->bpp;
+    recovered_image->reserved = malloc(4);
+    recovered_image->reserved[0] = 0;
+    recovered_image->reserved[1] = 0;
+    recovered_image->reserved[2] = 0;
+    recovered_image->reserved[3] = 0;
+    int image_size = recovered_image->width * recovered_image->height;
+
+    int width_bytes = recovered_image->width * recovered_image->bpp / 8;
+    int padded_row_bytes = (width_bytes % 4 == 0) ? width_bytes : (width_bytes + (4 - (width_bytes % 4)));
+    int padded_image_size = padded_row_bytes * recovered_image->height;
+    recovered_image->pixels = malloc(padded_image_size);
+
+    for (int pix = 0; pix < shadow_len; ++pix)
+    {
+        uint8_t y_vals[MAX_K];
+        for (int j = 0; j < k; ++j)
+        {
+            y_vals[j] = shadow_array[j][pix];
+        }
+        uint8_t *pixel = bmp_get_pixel_address(recovered_image, pix % recovered_image->width, pix / recovered_image->width);
+        *pixel = lagrange_reconstruct_pixel(y_vals, x_array, k);
+    }
+
+    uint8_t *rng_table = ptable_get_rng_table_4bytealigned(recovered_image->width, recovered_image->height, seed);
+    if (!rng_table)
+    {
+        fprintf(stderr, "Failed to generate RNG table\n");
+        return NULL;
+    }
+
+    uint8_t *ptr = recovered_image->pixels;
+    for (int i = 0; i < padded_image_size; ++i)
+    {
+        ptr[i] ^= rng_table[i];
+    }
+
+    bmp_save("recovered.bmp", recovered_image);
+    return recovered_image;
 }
 
 BMPImageT *sss_recover_generic(BMPImageT **shadows, uint32_t k)
