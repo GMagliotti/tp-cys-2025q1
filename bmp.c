@@ -171,6 +171,80 @@ BMPImageT *bmp_copy(BMPImageT *image)
     return copy;
 }
 
+BmpImage *bmp_create(int32_t width, int32_t height, uint8_t bpp, BMPColorT *palette, uint32_t pcolors)
+{
+    if (width <= 0 || height == 0)
+    {
+        fprintf(stderr, "bmp_create: Invalid image dimensions: %d x %d\n", width, height);
+        return NULL;
+    }
+
+    if (height < 0)
+    {
+        fprintf(stderr, "bmp_create: Top-down BMP images are not yet supported\n");
+        return NULL;
+    }
+
+    if (bpp != 8)
+    {
+        fprintf(stderr, "bmp_create: Unsupported bits per pixel: %u\n", bpp);
+        return NULL;
+    }
+
+    BmpImage *image = malloc(sizeof(BmpImage));
+    if (image == NULL)
+    {
+        fprintf(stderr, "bmp_create: Error allocating memory for new image\n");
+        return NULL;
+    }
+
+    image->width = width;
+    image->height = height;
+    image->bpp = bpp;
+
+    uint32_t new_pcolors = (1 << bpp);
+    image->palette = calloc(new_pcolors, sizeof(BMPColorT));
+    if (image->palette == NULL)
+    {
+        fprintf(stderr, "bmp_create: Error allocating memory for palette\n");
+        goto error_clean_image;
+    }
+
+    bool can_copy_palette = pcolors > 0 && pcolors <= new_pcolors;
+    if (!can_copy_palette)
+    {
+        fprintf(stderr, "bmp_create: Palette of  %u\n colors cannot be copied over.\n", pcolors);
+        fprintf(stderr, "Defaulting to zeroed palette.\n");
+    }
+    else if (palette != NULL)
+    {
+        fprintf(stdout, "bmp_create: Copying palette data\n");
+        memcpy(image->palette, palette, pcolors * sizeof(BMPColorT));
+    }
+
+    // 4-byte alignment for pixel scanline, required by BMP spec
+    uint32_t bytes_per_pixel = bpp / 8;
+    uint32_t bytes_per_scanline = (width * bytes_per_pixel + 3) & ~3;
+    uint32_t image_size = bytes_per_scanline * abs(height); // height can be negative!
+
+    image->pixels = calloc(image_size, 1);
+    if (image->pixels == NULL)
+    {
+        fprintf(stderr, "bmp_create: Error allocating memory for pixel data\n");
+        goto error_clean_palette;
+    }
+
+    return image;
+
+error_clean_palette:
+    free(image->palette);
+    image->palette = NULL;
+error_clean_image:
+    free(image);
+    image = NULL;
+    return NULL;
+}
+
 BmpImage *bmp_load(const char *filename)
 {
     FILE *file = fopen(filename, "rb");
@@ -295,7 +369,7 @@ int bmp_save(const char *filename, const BmpImage *image)
         return -1;
     }
 
-    const uint8_t *res = image->reserved; 
+    const uint8_t *res = image->reserved;
     if (!CHECK_HEADER_RESERVED(res[0], res[1], res[2], res[3]))
         printf("Saving non-standard image with modified reserved bytes.\n");
 

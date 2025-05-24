@@ -67,6 +67,22 @@ typedef struct BmpImageT BmpImage;
  */
 BMPImageT *bmp_copy(BMPImageT *image);
 
+/** Create an empty bmp image with all necessary memory allocations. 
+ * 
+ * @param width The width of the image in pixels.
+ * @param height The height of the image in pixels.
+ * @param bpp The color depth of the image in bits per pixel
+ * @param palette The color palette to use for the image. 
+ *          If NULL, the pallette will be intialized with zeros.
+ *          If bpp is greater than 8, this parameter is ignored.
+ * @param pcolors The expected number of colors in the pallette.
+ *         If bpp is greater than 8, this parameter is ignored.
+ * @return A pointer to the newly created BmpImage structure, or NULL on failure.
+ * @note The caller is responsible for freeing the returned BmpImage and its associated buffers.
+ *       It is recommended to use bmp_unload() for this purpose.
+*/
+BMPImageT *bmp_create(uint32_t width, uint32_t height, uint8_t bpp, BMPColorT *palette, uint32_t pcolors);
+
 /**
  * @brief Get the address of a pixel in the image, considering BMP format spec.
  * @param image The image to get the pixel from.
