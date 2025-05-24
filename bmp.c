@@ -286,6 +286,7 @@ BmpImage *bmp_load(const char *filename)
     }
 
     uint32_t palette_entries = iheader.colors_used ? iheader.colors_used : (1 << iheader.bpp);
+    image->colors_used = palette_entries;
     uint32_t palette_offset = sizeof(BitmapFileHeader) + iheader.dib_header_size;
     uint32_t bytes_per_scanline = (iheader.bpp * iheader.width + 31) / 32 * 4;
     uint32_t image_size = bytes_per_scanline * abs(iheader.height);
@@ -379,7 +380,7 @@ int bmp_save(const char *filename, const BmpImage *image)
     fheader.signature[0] = 'B';
     fheader.signature[1] = 'M';
     fheader.file_size = calculate_file_size(image);
-    fheader.bof = sizeof(BitmapFileHeader) + sizeof(BitmapInfoHeader) + (image->bpp <= 8 ? (1 << image->bpp) * sizeof(BMPColorT) : 0);
+    fheader.bof = sizeof(BitmapFileHeader) + sizeof(BitmapInfoHeader) + image->colors_used * sizeof(BMPColorT);
     fheader.reserved[0] = image->reserved[0];
     fheader.reserved[1] = image->reserved[1];
     fheader.reserved[2] = image->reserved[2];
@@ -393,7 +394,7 @@ int bmp_save(const char *filename, const BmpImage *image)
     iheader.image_size = 0;                                          // Set to 0 for uncompressed
     iheader.h_resolution = 0;                                        // Set to 0 for default resolution
     iheader.v_resolution = 0;                                        // Set to 0 for default resolution
-    iheader.colors_used = (image->bpp <= 8) ? (1 << image->bpp) : 0; // Set to 0 when no palette is used
+    iheader.colors_used = image->colors_used;                       // Set to 0 when no palette is used
     iheader.important_colors = 0;                                    // Set to 0 for all colors
     fwrite(&fheader, sizeof(BitmapFileHeader), 1, file);
     if (ferror(file))

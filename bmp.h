@@ -44,6 +44,7 @@ typedef struct BmpImageT {
     int32_t height;
     uint16_t bpp;
     BMPColorT* palette;
+    uint32_t colors_used;
     void* pixels;
     uint8_t *reserved; // 4
 } BMPImageT;
