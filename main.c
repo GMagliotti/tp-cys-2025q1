@@ -13,6 +13,14 @@ int main(int argc, char const *argv[])
     printf("Successfully load the whole thing!\n");
 
     bmp_save("copy.bmp", image);
+    for (int j = 15; j >= 0; j--)
+    {
+        for (int i = 0; i < 16; i++)
+        {
+            printf("%02X ", *((unsigned int*)bmp_get_pixel_address(image, i, j)) & 0xFF);
+        }
+        printf("\n");
+    }
     sss_distribute(image, 8, 10);
     
     BMPImageT *shadows[11] = {0};

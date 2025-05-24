@@ -16,7 +16,7 @@ bool hide_shadow_lsb_from_buffer(const uint8_t *shadow_data, size_t shadow_len, 
 
     uint32_t width_bytes = cover->width * cover->bpp / 8;
     uint32_t padded_width_bytes = (width_bytes % 4 == 0) ? width_bytes : (width_bytes + (4 - (width_bytes % 4)));
-    size_t cover_capacity = padded_width_bytes * cover->height;
+    size_t cover_capacity = padded_width_bytes * cover->height; 
 
     if (cover_capacity < bits_needed)
     {
@@ -89,8 +89,20 @@ bool sss_distribute_share_image(const BMPImageT *Q, BMPImageT **shadows, int k, 
 
     uint32_t total_pixels = Q->width * Q->height;
     uint8_t coeffs[MAX_K] = {0};
+    memset(coeffs, 0, sizeof(coeffs));
     int sections = total_pixels / k;
     int remaining = total_pixels % k;
+
+    // Allocate shadow_data once
+    for (int i = 0; i < n; ++i)
+    {
+        shadow_data[i] = malloc(sections * sizeof(uint8_t));
+        if (!shadow_data[i])
+        {
+            fprintf(stderr, "Out of memory allocating shadow_data[%d]\n", i);
+            return false;
+        }
+    }
 
     for (int section = 0; section < sections; ++section)
     {
@@ -113,6 +125,7 @@ bool sss_distribute_share_image(const BMPImageT *Q, BMPImageT **shadows, int k, 
                 uint16_t fx = poly_eval(coeffs, k, i + 1);
                 if (fx == 256)
                 {
+                    // TODO see if working
                     // decrease first non-zero coeff
                     for (int j = 0; j < k; ++j)
                     {
@@ -128,25 +141,15 @@ bool sss_distribute_share_image(const BMPImageT *Q, BMPImageT **shadows, int k, 
             }
         } while (!valid);
 
-        // ✅ Allocate buffers once before the section loop
-        for (int i = 0; i < n; ++i)
-        {
-            shadow_data[i] = malloc(sections * sizeof(uint8_t));
-            if (!shadow_data[i])
-            {
-                fprintf(stderr, "Out of memory allocating shadow_data[%d]\n", i);
-                return false;
-            }
-        }
-
         // For each section:
         for (int i = 0; i < n; ++i)
         {
             uint16_t fx = poly_eval(coeffs, k, i + 1);
             assert(fx <= 255);
 
-            int x = section % shadows[i]->width;
-            int y = section / shadows[i]->width;
+            int shadow_idx = section;
+            int x = shadow_idx % shadows[i]->width;
+            int y = shadow_idx / shadows[i]->width;
             uint8_t *px = (uint8_t *)bmp_get_pixel_address(shadows[i], x, y);
             *px = (uint8_t)fx;
 
@@ -427,35 +430,12 @@ BMPImageT *sss_recover_8(BMPImageT **shadows, uint32_t k)
     uint16_t seed = shadows[0]->reserved[0] | (shadows[0]->reserved[1] << 8);
     bool flag = true, set = false, error = false;
     int i = 0;
-    // while (flag)
-    // {
-    //     if (shadows[i] != NULL)
-    //     {
-    //         i++;
-    //     }
-
-    //     if (!set)
-    //     {
-    //         seed = shadows[i]->reserved[0] | (shadows[i]->reserved[1] << 8);
-    //         set = true;
-    //     }
-    //     else if (seed != (shadows[i]->reserved[0] | (shadows[i]->reserved[1] << 8)))
-    //     {
-    //         fprintf(stderr, "Error: shadows have different seeds\n");
-    //         error = true;
-    //     }
-    // }
 
     if (error)
     {
         fprintf(stderr, "Error: shadows are not valid\n");
         return NULL;
     }
-    // if (i < k)
-    // {
-    //     fprintf(stderr, "Not enough shadows to recover the image\n");
-    //     return NULL;
-    // }
 
     uint8_t **shadow_array = malloc(k * sizeof(uint8_t *));
     uint16_t *x_array = malloc(k * sizeof(uint16_t));
