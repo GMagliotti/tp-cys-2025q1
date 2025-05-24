@@ -16,7 +16,7 @@ bool hide_shadow_lsb_from_buffer(const uint8_t *shadow_data, size_t shadow_len, 
 
     uint32_t width_bytes = cover->width * cover->bpp / 8;
     uint32_t padded_width_bytes = (width_bytes % 4 == 0) ? width_bytes : (width_bytes + (4 - (width_bytes % 4)));
-    size_t cover_capacity = padded_width_bytes * cover->height; 
+    size_t cover_capacity = padded_width_bytes * cover->height;
 
     if (cover_capacity < bits_needed)
     {
@@ -349,6 +349,81 @@ uint16_t modinv(int a, int p)
     return (uint16_t)t;
 }
 
+void lagrange_solve_coeffs(const uint8_t *y, const uint16_t *x, int k, uint8_t *out_coeffs)
+{
+    uint16_t **A = malloc(k * sizeof(uint16_t *));
+    for (int i = 0; i < k; ++i)
+    {
+        A[i] = malloc((k + 1) * sizeof(uint16_t)); // last column for y
+        uint16_t xi = 1;
+        for (int j = 0; j < k; ++j)
+        {
+            A[i][j] = xi;
+            xi = (xi * x[i]) % PRIME_MODULUS;
+        }
+        A[i][k] = y[i]; // append y as RHS
+    }
+
+    // Gaussian Elimination mod PRIME_MODULUS
+    for (int col = 0; col < k; ++col)
+    {
+        // Find pivot
+        int pivot = -1;
+        for (int row = col; row < k; ++row)
+        {
+            if (A[row][col] != 0)
+            {
+                pivot = row;
+                break;
+            }
+        }
+
+        if (pivot == -1)
+        {
+            fprintf(stderr, "Singular matrix: pivot not found\n");
+            exit(EXIT_FAILURE);
+        }
+
+        // Swap rows if needed
+        if (pivot != col)
+        {
+            uint16_t *tmp = A[col];
+            A[col] = A[pivot];
+            A[pivot] = tmp;
+        }
+
+        // Normalize pivot row
+        uint16_t inv = modinv(A[col][col], PRIME_MODULUS);
+        for (int j = col; j <= k; ++j)
+            A[col][j] = (A[col][j] * inv) % PRIME_MODULUS;
+
+        // Eliminate below
+        for (int row = col + 1; row < k; ++row)
+        {
+            uint16_t factor = A[row][col];
+            for (int j = col; j <= k; ++j)
+            {
+                A[row][j] = (PRIME_MODULUS + A[row][j] - factor * A[col][j] % PRIME_MODULUS) % PRIME_MODULUS;
+            }
+        }
+    }
+
+    // Back-substitution
+    for (int i = k - 1; i >= 0; --i)
+    {
+        uint16_t sum = A[i][k];
+        for (int j = i + 1; j < k; ++j)
+        {
+            sum = (PRIME_MODULUS + sum - A[i][j] * out_coeffs[j] % PRIME_MODULUS) % PRIME_MODULUS;
+        }
+        out_coeffs[i] = sum;
+    }
+
+    for (int i = 0; i < k; ++i)
+        free(A[i]);
+    free(A);
+}
+
 uint8_t lagrange_reconstruct_pixel(uint8_t *y, uint16_t *x, int k)
 {
     int sum = 0;
@@ -440,7 +515,7 @@ BMPImageT *sss_recover_8(BMPImageT **shadows, uint32_t k)
     uint8_t **shadow_array = malloc(k * sizeof(uint8_t *));
     uint16_t *x_array = malloc(k * sizeof(uint16_t));
     int shadow_len = shadows[0]->width * shadows[0]->height / k;
-    for (int i = 0; shadows[i] != NULL; i++)
+    for (int i = 0; i < k; i++)
     {
         shadow_array[i] = malloc(shadow_len);
         extract_shadow_lsb_to_buffer(shadow_array[i], shadow_len, shadows[i]);
@@ -465,15 +540,21 @@ BMPImageT *sss_recover_8(BMPImageT **shadows, uint32_t k)
     int padded_image_size = padded_row_bytes * recovered_image->height;
     recovered_image->pixels = malloc(padded_image_size);
 
-    for (int pix = 0; pix < shadow_len; ++pix)
+    for (int section = 0; section < shadow_len; ++section)
     {
         uint8_t y_vals[MAX_K];
         for (int j = 0; j < k; ++j)
+            y_vals[j] = shadow_array[j][section];
+
+        uint8_t recovered_coeffs[MAX_K];
+        lagrange_solve_coeffs(y_vals, x_array, k, recovered_coeffs);
+
+        for (int i = 0; i < k; ++i)
         {
-            y_vals[j] = shadow_array[j][pix];
+            int pixel_index = section * k + i;
+            uint8_t *px = bmp_get_pixel_address(recovered_image, pixel_index % recovered_image->width, pixel_index / recovered_image->width);
+            *px = recovered_coeffs[i];
         }
-        uint8_t *pixel = bmp_get_pixel_address(recovered_image, pix % recovered_image->width, pix / recovered_image->width);
-        *pixel = lagrange_reconstruct_pixel(y_vals, x_array, k);
     }
 
     uint8_t *rng_table = ptable_get_rng_table_4bytealigned(recovered_image->width, recovered_image->height, seed);
