@@ -81,7 +81,7 @@ BMPImageT *bmp_copy(BMPImageT *image);
  * @note The caller is responsible for freeing the returned BmpImage and its associated buffers.
  *       It is recommended to use bmp_unload() for this purpose.
 */
-BMPImageT *bmp_create(uint32_t width, uint32_t height, uint8_t bpp, BMPColorT *palette, uint32_t pcolors);
+BMPImageT *bmp_create(int32_t width, int32_t height, uint8_t bpp, BMPColorT *palette, uint32_t pcolors);
 
 /**
  * @brief Get the address of a pixel in the image, considering BMP format spec.
@@ -96,6 +96,16 @@ static inline void *bmp_get_pixel_address(const BMPImageT *image, int32_t x, int
 {
     int padw_b = ((image->width)*(image->bpp)/8 + 3) & ~3;
     return ((uint8_t *)image->pixels) + (y * padw_b) + x * (image->bpp / 8);
+}
+
+/**
+ * @brief Calculate the nearest 4-byte aligned size for a given width in bytes.
+ * @param w The width in bytes to align.
+ * @return The aligned width in bytes according to the BMP specification.
+ */
+static inline uint32_t bmp_align(uint32_t w)
+{
+    return (w + 3) & ~3;
 }
 
 /**

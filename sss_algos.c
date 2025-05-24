@@ -6,7 +6,7 @@
 #define MIN_K 2
 #define MIN_N 2
 
-bool hide_shadow_lsb_from_buffer(const uint8_t *shadow_data, size_t shadow_len, BMPImageT *cover, uint16_t seed, int shadow_index)
+bool hide_shadow_lsb_from_buffer(const uint8_t *shadow_data, size_t shadow_len, BMPImageT *cover, uint16_t seed)
 {
     if (!shadow_data || !cover || !cover->pixels)
         return false;
@@ -301,7 +301,7 @@ BMPImageT **sss_distribute_8(BMPImageT *image, uint32_t k, uint32_t n)
         }
 
         int size = shadows[i]->width * shadows[i]->height / k;
-        bool ok = hide_shadow_lsb_from_buffer(shadow_data[i], size, cover, seed, i);
+        bool ok = sssh_8bit_lsb_into_cover(shadow_data[i], size, cover, seed);
         if (!ok)
         {
             fprintf(stderr, "Failed to hide shadow %d in cover image\n", i);

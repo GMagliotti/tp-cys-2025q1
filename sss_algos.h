@@ -1,6 +1,7 @@
 #ifndef _SSS_ALGOS_H
 #define _SSS_ALGOS_H
 #include "bmp.h"
+#include "sss_helpers.h"
 #include "permutation_table.h"
 
 typedef BMPImageT **(*DistributeFnT)(BMPImageT *image, uint32_t k, uint32_t n);
