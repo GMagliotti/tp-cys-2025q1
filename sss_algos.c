@@ -528,6 +528,7 @@ BMPImageT *sss_recover_8(BMPImageT **shadows, uint32_t k)
     recovered_image->width = shadows[0]->width;
     recovered_image->height = shadows[0]->height;
     recovered_image->bpp = shadows[0]->bpp;
+    recovered_image->colors_used = shadows[0]->colors_used;
     recovered_image->reserved = malloc(4);
     recovered_image->reserved[0] = 0;
     recovered_image->reserved[1] = 0;

@@ -287,6 +287,7 @@ BmpImage *bmp_load(const char *filename)
 
     uint32_t palette_entries = iheader.colors_used ? iheader.colors_used : (1 << iheader.bpp);
     image->colors_used = palette_entries;
+    fprintf(stdout, "bmp_load: Colors used: %u\n", image->colors_used);
     uint32_t palette_offset = sizeof(BitmapFileHeader) + iheader.dib_header_size;
     uint32_t bytes_per_scanline = (iheader.bpp * iheader.width + 31) / 32 * 4;
     uint32_t image_size = bytes_per_scanline * abs(iheader.height);
@@ -363,6 +364,7 @@ cleanup_file:
 
 int bmp_save(const char *filename, const BmpImage *image)
 {
+    fprintf(stdout, "bmp_save: Colors used %d\n", image->colors_used);
     FILE *file = fopen(filename, "wb");
     if (file == NULL)
     {
