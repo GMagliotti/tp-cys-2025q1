@@ -55,7 +55,7 @@ int main(int argc, char const *argv[]) {
     // Validation of mandatory parameters
     if ((distribute + recover) != 1 || !secret_file || k <= 0) {
         fprintf(stderr, "Error: Missing or incorrect mandatory parameters.\n");
-        fprintf(stderr, "Use: %s -d|-r -secret archivo -k num [-n num] [-dir directorio]\n", argv[0]);
+        fprintf(stderr, "Use: %s -d|-r -secret archivo -k num [-n num] [-dir directory]\n", argv[0]);
         return 1;
     }
 
