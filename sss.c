@@ -19,7 +19,7 @@ static RecoverFnT get_recover_function(uint32_t k)
     return sss_recover_generic;
 }
 
-BMPImageT **sss_distribute(BMPImageT *image, uint32_t k, uint32_t n)
+BMPImageT **sss_distribute(BMPImageT *image, uint32_t k, uint32_t n, const char *covers_dir, const char *output_dir)
 {
     if (k < 2 || k > 10)
     {
@@ -32,12 +32,12 @@ BMPImageT **sss_distribute(BMPImageT *image, uint32_t k, uint32_t n)
         fprintf(stderr, "Invalid parameters: n must be greater than 1, and k must be smaller than n");
     }
 
-    BMPImageT **shadows = get_distribute_function(k)(image, k, n);
+    BMPImageT **shadows = get_distribute_function(k)(image, k, n, covers_dir, output_dir);
     return shadows;
 }
 
-BMPImageT *sss_recover(BMPImageT **shadows, uint32_t k)
+BMPImageT *sss_recover(BMPImageT **shadows, uint32_t k, const char * recovered_filename)
 {
-    BMPImageT *image = get_recover_function(k)(shadows, k);
+    BMPImageT *image = get_recover_function(k)(shadows, k, recovered_filename);
     return image;
 }

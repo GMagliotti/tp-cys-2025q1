@@ -272,7 +272,7 @@ error_oom:
     exit(EXIT_FAILURE);
 }
 
-BMPImageT **sss_distribute_8(BMPImageT *image, uint32_t k, uint32_t n)
+BMPImageT **sss_distribute_8(BMPImageT *image, uint32_t k, uint32_t n, const char *covers_dir, const char *output_dir)
 {
     uint16_t seed = rand() % 65536;
     sss_distribute_initial_xor_inplace(image, NULL, seed);
@@ -291,37 +291,40 @@ BMPImageT **sss_distribute_8(BMPImageT *image, uint32_t k, uint32_t n)
         exit(EXIT_FAILURE);
     }
 
-    for (int i = 0; i < n; i++)
-    {
-        BMPImageT *cover = bmp_load("cover.bmp"); // or generate it if it's fixed size
-        if (!cover)
-        {
-            fprintf(stderr, "Failed to load cover image for shadow %d\n", i);
+    for (int i = 0; i < n; i++) {
+        char cover_path[512];
+        snprintf(cover_path, sizeof(cover_path), "%s/cover1.bmp", covers_dir);
+
+        BMPImageT *cover = bmp_load(cover_path);
+        if (!cover) {
+            fprintf(stderr, "Failed to load cover image '%s' for shadow %d\n", cover_path, i);
             exit(EXIT_FAILURE);
         }
 
         int size = shadows[i]->width * shadows[i]->height / k;
         bool ok = sssh_8bit_lsb_into_cover(shadow_data[i], size, cover, seed);
-        if (!ok)
-        {
+        if (!ok) {
             fprintf(stderr, "Failed to hide shadow %d in cover image\n", i);
             exit(EXIT_FAILURE);
         }
 
+        // Guardar la imagen stego
         uint16_t x = i + 1;
         cover->reserved[0] = seed & 0xFF;
         cover->reserved[1] = (seed >> 8) & 0xFF;
         cover->reserved[2] = x & 0xFF;
         cover->reserved[3] = (x >> 8) & 0xFF;
-        char filename[256];
-        snprintf(filename, sizeof(filename), "stego%d.bmp", i);
-        bmp_save(filename, cover);
+
+        char output_path[512];
+        snprintf(output_path, sizeof(output_path), "%s/stego%d.bmp", output_dir, i + 1);
+        bmp_save(output_path, cover);
         bmp_unload(cover);
     }
+
     return shadows;
 }
 
-BMPImageT **sss_distribute_generic(BMPImageT *image, uint32_t k, uint32_t n)
+BMPImageT **sss_distribute_generic(BMPImageT *image, uint32_t k, uint32_t n, const char *covers_dir, const char *output_dir)
 {
     fprintf(stderr, "sss_distribute_generic not implemented\n");
     return NULL;
@@ -494,7 +497,7 @@ bool extract_shadow_lsb_to_buffer(uint8_t *out_shadow_data, size_t shadow_len, c
     return true;
 }
 
-BMPImageT *sss_recover_8(BMPImageT **shadows, uint32_t k)
+BMPImageT *sss_recover_8(BMPImageT **shadows, uint32_t k, const char * recovered_filename)
 {
     if (k < MIN_K || k > MAX_K)
     {
@@ -571,11 +574,11 @@ BMPImageT *sss_recover_8(BMPImageT **shadows, uint32_t k)
         ptr[i] ^= rng_table[i];
     }
 
-    bmp_save("recovered.bmp", recovered_image);
+    bmp_save(recovered_filename, recovered_image);
     return recovered_image;
 }
 
-BMPImageT *sss_recover_generic(BMPImageT **shadows, uint32_t k)
+BMPImageT *sss_recover_generic(BMPImageT **shadows, uint32_t k, const char * recovered_filename)
 {
     fprintf(stderr, "sss_recover_generic not implemented\n");
     return NULL;
