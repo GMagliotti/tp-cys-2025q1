@@ -90,7 +90,7 @@ bool sss_distribute_share_image(const BMPImageT *Q, BMPImageT **shadows, int k, 
     uint32_t total_pixels = Q->width * Q->height;
     uint8_t coeffs[MAX_K] = {0};
     memset(coeffs, 0, sizeof(coeffs));
-    int sections = total_pixels / k;
+    int sections = (total_pixels + k - 1)/ k;
     // int remaining = total_pixels % k;
 
     // Allocate shadow_data once
@@ -110,6 +110,11 @@ bool sss_distribute_share_image(const BMPImageT *Q, BMPImageT **shadows, int k, 
         for (int i = 0; i < k; ++i)
         {
             int index = section * k + i;
+            if (index >= total_pixels)
+            {
+                coeffs[i] = 0; // pad with 0s if overflow
+                continue;
+            }
             int x = index % Q->width;
             int y = index / Q->width;
             coeffs[i] = *(uint8_t *)bmp_get_pixel_address(Q, x, y);
@@ -368,7 +373,7 @@ error_oom:
 BMPImageT **sss_distribute_8(BMPImageT *image, uint32_t k, uint32_t n, const char *covers_dir, const char *output_dir)
 {
     uint16_t seed = rand() % 65536;
-    sss_distribute_initial_xor_inplace(image, NULL, seed);
+    // sss_distribute_initial_xor_inplace(image, NULL, seed);
     BMPImageT **shadows = sss_distribute_generate_shadows_buffers(image, k, n);
     for (int i = 0; i < n; i++)
     {
@@ -396,7 +401,7 @@ BMPImageT **sss_distribute_8(BMPImageT *image, uint32_t k, uint32_t n, const cha
             exit(EXIT_FAILURE);
         }
 
-        int size = shadows[i]->width * shadows[i]->height / k;
+        int size = (shadows[i]->width * shadows[i]->height + k - 1) / k;
         bool ok = sssh_8bit_lsb_into_cover(shadow_data[i], size, cover, seed);
         if (!ok)
         {
@@ -470,13 +475,11 @@ BMPImageT **sss_distribute_generic(BMPImageT *image, uint32_t k, uint32_t n, con
     return shadows;
 }
 
-// Extended Euclidean Algorithm for inverse mod 257
-uint16_t modinv(int a, int p)
-{
+// Modular inverse with extended Euclidean algorithm
+uint16_t modinv(int a, int p) {
     int t = 0, newt = 1;
     int r = p, newr = a;
-    while (newr != 0)
-    {
+    while (newr != 0) {
         int quotient = r / newr;
         int tmp = newt;
         newt = t - quotient * newt;
@@ -485,11 +488,41 @@ uint16_t modinv(int a, int p)
         newr = r - quotient * newr;
         r = tmp;
     }
-    if (r > 1)
-        return 0; // Not invertible
-    if (t < 0)
-        t += p;
+    if (r > 1) return 0;
+    if (t < 0) t += p;
     return (uint16_t)t;
+}
+
+void lagrange_reconstruct_coeffs(const uint8_t *y, const uint16_t *x, int k, uint8_t *out_coeffs) {
+    uint8_t ywork[MAX_K];
+
+    for (int i = 0; i < k; ++i)
+        ywork[i] = y[i]; // copy original y
+
+    for (int step = 0; step < k; ++step) {
+        int coeff = 0;
+
+        for (int i = 0; i < k; ++i) {
+            int num = 1;
+            int denom = 1;
+            for (int j = 0; j < k; ++j) {
+                if (j == i) continue;
+                num = (num * (PRIME_MODULUS - x[j])) % PRIME_MODULUS;
+                denom = (denom * ((x[i] - x[j] + PRIME_MODULUS) % PRIME_MODULUS)) % PRIME_MODULUS;
+            }
+
+            int li0 = (num * modinv(denom, PRIME_MODULUS)) % PRIME_MODULUS;
+            coeff = (coeff + li0 * ywork[i]) % PRIME_MODULUS;
+        }
+
+        out_coeffs[step] = coeff;
+
+        // Update ywork for next coefficient: y' = (y - coeff) / x
+        for (int i = 0; i < k; ++i) {
+            int num = (ywork[i] - coeff + PRIME_MODULUS) % PRIME_MODULUS;
+            ywork[i] = (num * modinv(x[i], PRIME_MODULUS)) % PRIME_MODULUS;
+        }
+    }
 }
 
 void lagrange_solve_coeffs(const uint8_t *y, const uint16_t *x, int k, uint8_t *out_coeffs)
@@ -538,7 +571,8 @@ void lagrange_solve_coeffs(const uint8_t *y, const uint16_t *x, int k, uint8_t *
         // Normalize pivot row
         uint16_t inv = modinv(A[col][col], PRIME_MODULUS);
         for (int j = col; j <= k; ++j)
-            A[col][j] = (A[col][j] * inv) % PRIME_MODULUS;
+            A[col][j] = ((uint32_t)A[col][j] * inv) % PRIME_MODULUS;
+
 
         // Eliminate below
         for (int row = col + 1; row < k; ++row)
@@ -550,6 +584,7 @@ void lagrange_solve_coeffs(const uint8_t *y, const uint16_t *x, int k, uint8_t *
             }
         }
     }
+    memset(out_coeffs, 0, k);
 
     // Back-substitution
     for (int i = k - 1; i >= 0; --i)
@@ -617,7 +652,7 @@ BMPImageT *sss_recover_8(BMPImageT **shadows, uint32_t k, const char *recovered_
 
     uint8_t **shadow_array = malloc(k * sizeof(uint8_t *));
     uint16_t *x_array = malloc(k * sizeof(uint16_t));
-    int shadow_len = shadows[0]->width * shadows[0]->height / k;
+    int shadow_len = (shadows[0]->width * shadows[0]->height + k - 1) / k;
     for (int i = 0; i < k; i++)
     {
         shadow_array[i] = malloc(shadow_len);
@@ -651,11 +686,13 @@ BMPImageT *sss_recover_8(BMPImageT **shadows, uint32_t k, const char *recovered_
             y_vals[j] = shadow_array[j][section];
 
         uint8_t recovered_coeffs[MAX_K];
-        lagrange_solve_coeffs(y_vals, x_array, k, recovered_coeffs);
+        lagrange_reconstruct_coeffs(y_vals, x_array, k, recovered_coeffs);
 
         for (int i = 0; i < k; ++i)
         {
             int pixel_index = section * k + i;
+            if (pixel_index >= recovered_image->width * recovered_image->height)
+                break;
             uint8_t *px = bmp_get_pixel_address(recovered_image, pixel_index % recovered_image->width, pixel_index / recovered_image->width);
             *px = recovered_coeffs[i];
         }
@@ -669,10 +706,10 @@ BMPImageT *sss_recover_8(BMPImageT **shadows, uint32_t k, const char *recovered_
     }
 
     uint8_t *ptr = recovered_image->pixels;
-    for (int i = 0; i < padded_image_size; ++i)
-    {
-        ptr[i] ^= rng_table[i];
-    }
+    // for (int i = 0; i < padded_image_size; ++i)
+    // {
+    //     ptr[i] ^= rng_table[i];
+    // }
 
     bmp_save(recovered_filename, recovered_image);
     return recovered_image;
