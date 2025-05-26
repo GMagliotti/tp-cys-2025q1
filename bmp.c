@@ -117,9 +117,9 @@ uint32_t calculate_file_size(const BmpImage *image)
     }
 
     uint32_t bytes_per_pixel = image->bpp / 8;
-    uint32_t bytes_per_scanline = (image->width * bytes_per_pixel + 3) & ~3; // Align to 4-byte boundary
+    uint32_t bytes_per_scanline = bmp_align(image->width * bytes_per_pixel); // Align to 4-byte boundary
     uint32_t image_size = bytes_per_scanline * abs(image->height);
-    uint32_t palette_size = image->bpp <= 8 ? (1 << image->bpp) * sizeof(BMPColorT) : 0;
+    uint32_t palette_size = image->colors_used * sizeof(BMPColorT);
 
     return sizeof(BitmapFileHeader) + sizeof(BitmapInfoHeader) + palette_size + image_size;
 }
@@ -417,7 +417,7 @@ int bmp_save(const char *filename, const BmpImage *image)
     if (image->bpp <= 8)
     {
         // the palette is init with calloc
-        fwrite(image->palette, sizeof(BMPColorT), (1 << image->bpp), file);
+        fwrite(image->palette, sizeof(BMPColorT), image->colors_used, file);
         if (ferror(file))
         {
             perror("Error writing palette data");
