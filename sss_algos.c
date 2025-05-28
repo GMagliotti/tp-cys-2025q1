@@ -90,13 +90,13 @@ bool sss_distribute_share_image(const BMPImageT *Q, BMPImageT **shadows, int k, 
     uint32_t total_pixels = Q->width * Q->height;
     uint8_t coeffs[MAX_K] = {0};
     memset(coeffs, 0, sizeof(coeffs));
-    int sections = (total_pixels + k - 1)/ k;
+    int sections = (total_pixels + k - 1) / k;
     // int remaining = total_pixels % k;
 
     // Allocate shadow_data once
     for (int i = 0; i < n; ++i)
     {
-        shadow_data[i] = malloc(sections * sizeof(uint8_t));
+        shadow_data[i] = calloc(sizeof(uint8_t), sections);
         if (!shadow_data[i])
         {
             fprintf(stderr, "Out of memory allocating shadow_data[%d]\n", i);
@@ -476,10 +476,12 @@ BMPImageT **sss_distribute_generic(BMPImageT *image, uint32_t k, uint32_t n, con
 }
 
 // Modular inverse with extended Euclidean algorithm
-uint16_t modinv(int a, int p) {
+uint16_t modinv(int a, int p)
+{
     int t = 0, newt = 1;
     int r = p, newr = a;
-    while (newr != 0) {
+    while (newr != 0)
+    {
         int quotient = r / newr;
         int tmp = newt;
         newt = t - quotient * newt;
@@ -488,25 +490,33 @@ uint16_t modinv(int a, int p) {
         newr = r - quotient * newr;
         r = tmp;
     }
-    if (r > 1) return 0;
-    if (t < 0) t += p;
+    if (r > 1)
+        return 0;
+    if (t < 0)
+        t += p;
     return (uint16_t)t;
 }
 
-void lagrange_reconstruct_coeffs(const uint8_t *y, const uint16_t *x, int k, uint8_t *out_coeffs) {
+void lagrange_reconstruct_coeffs(const uint8_t *y, const uint16_t *x, int k, uint8_t *out_coeffs)
+{
     uint8_t ywork[MAX_K];
+    uint8_t y_next[MAX_K]; // Temporary buffer
 
     for (int i = 0; i < k; ++i)
         ywork[i] = y[i]; // copy original y
 
-    for (int step = 0; step < k; ++step) {
+    for (int step = 0; step < k; ++step)
+    {
         int coeff = 0;
 
-        for (int i = 0; i < k; ++i) {
+        for (int i = 0; i < k; ++i)
+        {
             int num = 1;
             int denom = 1;
-            for (int j = 0; j < k; ++j) {
-                if (j == i) continue;
+            for (int j = 0; j < k; ++j)
+            {
+                if (j == i)
+                    continue;
                 num = (num * (PRIME_MODULUS - x[j])) % PRIME_MODULUS;
                 denom = (denom * ((x[i] - x[j] + PRIME_MODULUS) % PRIME_MODULUS)) % PRIME_MODULUS;
             }
@@ -517,11 +527,14 @@ void lagrange_reconstruct_coeffs(const uint8_t *y, const uint16_t *x, int k, uin
 
         out_coeffs[step] = coeff;
 
-        // Update ywork for next coefficient: y' = (y - coeff) / x
-        for (int i = 0; i < k; ++i) {
+        // Prepare next set of y values
+        for (int i = 0; i < k; ++i)
+        {
             int num = (ywork[i] - coeff + PRIME_MODULUS) % PRIME_MODULUS;
-            ywork[i] = (num * modinv(x[i], PRIME_MODULUS)) % PRIME_MODULUS;
+            y_next[i] = (num * modinv(x[i], PRIME_MODULUS)) % PRIME_MODULUS;
         }
+
+        memcpy(ywork, y_next, sizeof(uint8_t) * k);
     }
 }
 
@@ -572,7 +585,6 @@ void lagrange_solve_coeffs(const uint8_t *y, const uint16_t *x, int k, uint8_t *
         uint16_t inv = modinv(A[col][col], PRIME_MODULUS);
         for (int j = col; j <= k; ++j)
             A[col][j] = ((uint32_t)A[col][j] * inv) % PRIME_MODULUS;
-
 
         // Eliminate below
         for (int row = col + 1; row < k; ++row)
@@ -633,6 +645,8 @@ uint8_t lagrange_reconstruct_pixel(uint8_t *y, uint16_t *x, int k)
 
 BMPImageT *sss_recover_8(BMPImageT **shadows, uint32_t k, const char *recovered_filename)
 {
+    for (int i = 0; i < 8; i++)
+        printf("coeff[%d] = %d\n", i, out[i]);
     if (k < MIN_K || k > MAX_K)
     {
         fprintf(stderr, "Invalid parameters: k must be between 2 and 10\n");
@@ -655,7 +669,7 @@ BMPImageT *sss_recover_8(BMPImageT **shadows, uint32_t k, const char *recovered_
     int shadow_len = (shadows[0]->width * shadows[0]->height + k - 1) / k;
     for (int i = 0; i < k; i++)
     {
-        shadow_array[i] = malloc(shadow_len);
+        shadow_array[i] = calloc(shadow_len, sizeof(uint8_t));
         extract_shadow_lsb_to_buffer(shadow_array[i], shadow_len, shadows[i]);
         x_array[i] = shadows[i]->reserved[2] | (shadows[i]->reserved[3] << 8);
     }
@@ -677,7 +691,7 @@ BMPImageT *sss_recover_8(BMPImageT **shadows, uint32_t k, const char *recovered_
     int width_bytes = recovered_image->width * recovered_image->bpp / 8;
     int padded_row_bytes = (width_bytes % 4 == 0) ? width_bytes : (width_bytes + (4 - (width_bytes % 4)));
     int padded_image_size = padded_row_bytes * recovered_image->height;
-    recovered_image->pixels = malloc(padded_image_size);
+    recovered_image->pixels = calloc(padded_image_size, sizeof(uint8_t));
 
     for (int section = 0; section < shadow_len; ++section)
     {
@@ -686,7 +700,7 @@ BMPImageT *sss_recover_8(BMPImageT **shadows, uint32_t k, const char *recovered_
             y_vals[j] = shadow_array[j][section];
 
         uint8_t recovered_coeffs[MAX_K];
-        lagrange_reconstruct_coeffs(y_vals, x_array, k, recovered_coeffs);
+        lagrange_solve_coeffs(y_vals, x_array, k, recovered_coeffs);
 
         for (int i = 0; i < k; ++i)
         {
