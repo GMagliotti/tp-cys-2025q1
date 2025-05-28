@@ -49,15 +49,15 @@ bool sssh_8bit_lsb_into_cover(const uint8_t *shadow_data, size_t shadow_len, BMP
     return true;
 }
 
-bool sssh_lsb1_into_cover_k(const uint16_t *shadow_data, size_t shadow_len, BMPImageT *cover, uint16_t seed, int k, int16_t s_width, int16_t s_height)
+bool sssh_lsb1_into_cover_k(const uint8_t *shadow_data, size_t shadow_len, BMPImageT *cover, uint16_t seed, int k, int16_t s_width, int16_t s_height)
 {
     // 2 bytes for width and 2 bytes for height, 8 bits per byte
 
     if (!shadow_data || !cover || !cover->pixels || k < 1 || k > 10)
         return false;
 
-    // Each byte in the shadow buffer needs k bits (LSBs in the cover) + 4 bytes for width and height
-    size_t bits_needed = shadow_len * k + METADATA_SIZE;
+    // Each byte in the shadow buffer needs 8 bits (LSBs in the cover) + 4 bytes for width and height
+    size_t bits_needed = shadow_len * 8 + METADATA_SIZE;
 
     // padding is usable for the LSB
     uint32_t width_bytes = cover->width * cover->bpp / 8;
@@ -87,7 +87,7 @@ bool sssh_lsb1_into_cover_k(const uint16_t *shadow_data, size_t shadow_len, BMPI
 
     size_t shadow_byte_index = 0;
     uint16_t current_word = shadow_data[shadow_byte_index];
-    int bit_index = k - 1; // Start from MSB
+    int bit_index = 7; // Start from MSB
 
     for (; i < cover_capacity && shadow_byte_index < shadow_len; ++i)
     {
@@ -101,7 +101,7 @@ bool sssh_lsb1_into_cover_k(const uint16_t *shadow_data, size_t shadow_len, BMPI
         bit_index--;
         if (bit_index < 0)
         {
-            bit_index = k - 1;
+            bit_index = 7;
             shadow_byte_index++;
             if (shadow_byte_index < shadow_len)
             {
@@ -154,7 +154,7 @@ bool extract_shadow_lsb_to_buffer(uint8_t *out_shadow_data, size_t shadow_len, c
     return true;
 }
 
-LSBDecodeResultT sssh_extract_lsb1_kshadow(uint16_t *out_shadow_data, size_t shadow_len, const BMPImageT *cover, int k)
+LSBDecodeResultT sssh_extract_lsb1_kshadow(uint8_t *out_shadow_data, size_t shadow_len, const BMPImageT *cover, int k)
 {
     if (!out_shadow_data || !cover || !cover->pixels || k < 2 || k > 10)
         return (LSBDecodeResultT){.result = false, .s_width = 0, .s_height = 0};
@@ -188,7 +188,7 @@ LSBDecodeResultT sssh_extract_lsb1_kshadow(uint16_t *out_shadow_data, size_t sha
     }
     size_t shadow_byte_index = 0;
     uint16_t current_word = 0;
-    int bit_index = k - 1; // Start from MSB
+    int bit_index = 7; // Start from MSB
 
     for (size_t i = METADATA_SIZE; i < cover_capacity && shadow_byte_index < shadow_len; ++i)
     {
@@ -200,7 +200,7 @@ LSBDecodeResultT sssh_extract_lsb1_kshadow(uint16_t *out_shadow_data, size_t sha
         {
             out_shadow_data[shadow_byte_index] = current_word;
             current_word = 0;
-            bit_index = k - 1;
+            bit_index = 7;
             shadow_byte_index++;
         }
     }

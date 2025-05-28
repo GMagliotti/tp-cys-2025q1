@@ -165,7 +165,7 @@ bool sss_distribute_share_image(const BMPImageT *Q, BMPImageT **shadows, int k, 
     return true;
 }
 
-bool sss_distribute_share_image_k(const BMPImageT *Q, BMPImageT **shadows, int k, int n, uint16_t **shadow_data)
+bool sss_distribute_share_image_k(const BMPImageT *Q, BMPImageT **shadows, int k, int n, uint8_t **shadow_data)
 {
     if (!Q || !Q->pixels || !shadows)
     {
@@ -194,7 +194,7 @@ bool sss_distribute_share_image_k(const BMPImageT *Q, BMPImageT **shadows, int k
     // Allocate shadow_data once
     for (int i = 0; i < n; ++i)
     {
-        shadow_data[i] = malloc(sections * sizeof(uint16_t));
+        shadow_data[i] = malloc(sections * sizeof(uint8_t));
         if (!shadow_data[i])
         {
             fprintf(stderr, "Out of memory allocating shadow_data[%d]\n", i);
@@ -428,7 +428,7 @@ BMPImageT **sss_distribute_8(BMPImageT *image, uint32_t k, uint32_t n, const cha
 BMPImageT **sss_distribute_generic(BMPImageT *image, uint32_t k, uint32_t n, const char *covers_dir, const char *output_dir)
 {
     uint16_t seed = rand() % 65536;
-    sss_distribute_initial_xor_inplace(image, NULL, seed);
+    // sss_distribute_initial_xor_inplace(image, NULL, seed);
     BMPImageT **shadows = sss_distribute_generate_shadows_buffers(image, k, n);
     for (int i = 0; i < n; i++)
     {
@@ -437,7 +437,7 @@ BMPImageT **sss_distribute_generic(BMPImageT *image, uint32_t k, uint32_t n, con
         shadows[i]->height = image->height;
         shadows[i]->palette = image->palette; // TODO double free will be fixed later
     }
-    uint16_t *shadow_data[256] = {0};
+    uint8_t *shadow_data[256] = {0};
     if (sss_distribute_share_image_k(image, shadows, k, n, shadow_data) == false)
     {
         fprintf(stderr, "Failed to distribute image\n");
@@ -446,32 +446,37 @@ BMPImageT **sss_distribute_generic(BMPImageT *image, uint32_t k, uint32_t n, con
 
     for (int i = 0; i < n; i++)
     {
-        BMPImageT *cover = bmp_load("cover5.bmp"); // or generate it if it's fixed size
+        char cover_path[512];
+        snprintf(cover_path, sizeof(cover_path), "%s/cover1.bmp", covers_dir);
+
+        BMPImageT *cover = bmp_load(cover_path);
         if (!cover)
         {
-            fprintf(stderr, "Failed to load cover image for shadow %d\n", i);
+            fprintf(stderr, "Failed to load cover image '%s' for shadow %d\n", cover_path, i);
             exit(EXIT_FAILURE);
         }
 
-        int sections = (image->width * image->height + k - 1) / k;
-        bool ok = sssh_lsb1_into_cover_k(shadow_data[i], sections, cover, seed, k, image->width, image->height);
+        int size = (shadows[i]->width * shadows[i]->height + k - 1) / k;
+        bool ok = sssh_lsb1_into_cover_k(shadow_data[i], size, cover, seed, k, image->width, image->height);
         if (!ok)
         {
             fprintf(stderr, "Failed to hide shadow %d in cover image\n", i);
             exit(EXIT_FAILURE);
         }
 
-        fprintf(stderr, "Hiding shadow %d in cover image\n", i);
+        // Guardar la imagen stego
         uint16_t x = i + 1;
         cover->reserved[0] = seed & 0xFF;
         cover->reserved[1] = (seed >> 8) & 0xFF;
         cover->reserved[2] = x & 0xFF;
         cover->reserved[3] = (x >> 8) & 0xFF;
-        char filename[256];
-        snprintf(filename, sizeof(filename), "stego%d.bmp", i);
-        bmp_save(filename, cover);
+
+        char output_path[512];
+        snprintf(output_path, sizeof(output_path), "%s/stego%d.bmp", output_dir, i + 1);
+        bmp_save(output_path, cover);
         bmp_unload(cover);
     }
+
     return shadows;
 }
 
@@ -645,8 +650,6 @@ uint8_t lagrange_reconstruct_pixel(uint8_t *y, uint16_t *x, int k)
 
 BMPImageT *sss_recover_8(BMPImageT **shadows, uint32_t k, const char *recovered_filename)
 {
-    for (int i = 0; i < 8; i++)
-        printf("coeff[%d] = %d\n", i, out[i]);
     if (k < MIN_K || k > MAX_K)
     {
         fprintf(stderr, "Invalid parameters: k must be between 2 and 10\n");
@@ -721,9 +724,9 @@ BMPImageT *sss_recover_8(BMPImageT **shadows, uint32_t k, const char *recovered_
 
     uint8_t *ptr = recovered_image->pixels;
     // for (int i = 0; i < padded_image_size; ++i)
-    // {
-    //     ptr[i] ^= rng_table[i];
-    // }
+    //  {
+    //      ptr[i] ^= rng_table[i];
+    //  }
 
     bmp_save(recovered_filename, recovered_image);
     return recovered_image;
@@ -731,7 +734,6 @@ BMPImageT *sss_recover_8(BMPImageT **shadows, uint32_t k, const char *recovered_
 
 BMPImageT *sss_recover_generic(BMPImageT **shadows, uint32_t k, const char *recovered_filename)
 {
-
     if (k < MIN_K || k > MAX_K)
     {
         fprintf(stderr, "Invalid parameters: k must be between 2 and 10\n");
@@ -749,24 +751,22 @@ BMPImageT *sss_recover_generic(BMPImageT **shadows, uint32_t k, const char *reco
         return NULL;
     }
 
-    uint16_t **shadow_array = malloc(k * sizeof(uint16_t *));
+    uint8_t **shadow_array = malloc(k * sizeof(uint8_t *));
     uint16_t *x_array = malloc(k * sizeof(uint16_t));
-    LSBDecodeResultT res[k];
     LSBDecodeResultT tmp = sssh_extract_kshadow_dimensions(shadows[0]);
-    int total_pixels = tmp.s_height * tmp.s_width;
-    int shadow_len = (total_pixels + k - 1) / k;
+    int shadow_len = (tmp.s_width * tmp.s_height + k - 1) / k;
     for (int i = 0; i < k; i++)
     {
-        shadow_array[i] = malloc(shadow_len * sizeof(uint16_t));
-        res[i] = sssh_extract_lsb1_kshadow(shadow_array[i], shadow_len, shadows[i], k);
+        shadow_array[i] = calloc(shadow_len, sizeof(uint16_t));
+        sssh_extract_lsb1_kshadow(shadow_array[i], shadow_len, shadows[i], k);
         x_array[i] = shadows[i]->reserved[2] | (shadows[i]->reserved[3] << 8);
     }
 
     // modularize
     BMPImageT *recovered_image = malloc(sizeof(BMPImageT));
     recovered_image->palette = shadows[0]->palette;
-    recovered_image->width = res[0].s_width;
-    recovered_image->height = res[0].s_height;
+    recovered_image->width = tmp.s_width;
+    recovered_image->height = tmp.s_height;
     recovered_image->bpp = shadows[0]->bpp;
     recovered_image->colors_used = shadows[0]->colors_used;
     recovered_image->reserved = malloc(4);
@@ -774,13 +774,12 @@ BMPImageT *sss_recover_generic(BMPImageT **shadows, uint32_t k, const char *reco
     recovered_image->reserved[1] = 0;
     recovered_image->reserved[2] = 0;
     recovered_image->reserved[3] = 0;
-
     // int image_size = recovered_image->width * recovered_image->height;
 
     int width_bytes = recovered_image->width * recovered_image->bpp / 8;
-    int padded_row_bytes = bmp_align(width_bytes);
+    int padded_row_bytes = (width_bytes % 4 == 0) ? width_bytes : (width_bytes + (4 - (width_bytes % 4)));
     int padded_image_size = padded_row_bytes * recovered_image->height;
-    recovered_image->pixels = malloc(padded_image_size);
+    recovered_image->pixels = calloc(padded_image_size, sizeof(uint8_t));
 
     for (int section = 0; section < shadow_len; ++section)
     {
@@ -794,9 +793,8 @@ BMPImageT *sss_recover_generic(BMPImageT **shadows, uint32_t k, const char *reco
         for (int i = 0; i < k; ++i)
         {
             int pixel_index = section * k + i;
-            if (pixel_index >= total_pixels)
+            if (pixel_index >= recovered_image->width * recovered_image->height)
                 break;
-
             uint8_t *px = bmp_get_pixel_address(recovered_image, pixel_index % recovered_image->width, pixel_index / recovered_image->width);
             *px = recovered_coeffs[i];
         }
@@ -810,19 +808,105 @@ BMPImageT *sss_recover_generic(BMPImageT **shadows, uint32_t k, const char *reco
     }
 
     uint8_t *ptr = recovered_image->pixels;
-    for (int i = 0; i < padded_image_size; ++i)
-    {
-        ptr[i] ^= rng_table[i];
-    }
+    // for (int i = 0; i < padded_image_size; ++i)
+    //  {
+    //      ptr[i] ^= rng_table[i];
+    //  }
 
-    fprintf(stdout, "Recovered image size: %d bytes\n", padded_image_size);
-    fprintf(stdout, "Recovered image width: %d pixels\n", recovered_image->width);
-    fprintf(stdout, "Recovered image height: %d pixels\n", recovered_image->height);
-    fprintf(stdout, "Recovered image bpp: %d bits\n", recovered_image->bpp);
-    fprintf(stdout, "Recovered image colors used: %d\n", recovered_image->colors_used);
-    fprintf(stdout, "Recovered image reserved: %d %d %d %d\n", recovered_image->reserved[0], recovered_image->reserved[1], recovered_image->reserved[2], recovered_image->reserved[3]);
-    fprintf(stdout, "Recovered image palette: %p\n", recovered_image->palette);
-    fprintf(stdout, "Recovered image pixels: %p\n", recovered_image->pixels);
-    bmp_save("recovered.bmp", recovered_image);
+    bmp_save(recovered_filename, recovered_image);
     return recovered_image;
+
+    // if (k < MIN_K || k > MAX_K)
+    // {
+    //     fprintf(stderr, "Invalid parameters: k must be between 2 and 10\n");
+    //     return NULL;
+    // }
+
+    // uint16_t seed = shadows[0]->reserved[0] | (shadows[0]->reserved[1] << 8);
+    // // bool flag = true, set = false,
+    // bool error = false;
+    // // int i = 0;
+
+    // if (error)
+    // {
+    //     fprintf(stderr, "Error: shadows are not valid\n");
+    //     return NULL;
+    // }
+
+    // uint16_t **shadow_array = malloc(k * sizeof(uint16_t *));
+    // uint16_t *x_array = malloc(k * sizeof(uint16_t));
+    // LSBDecodeResultT res[k];
+    // LSBDecodeResultT tmp = sssh_extract_kshadow_dimensions(shadows[0]);
+    // int total_pixels = tmp.s_height * tmp.s_width;
+    // int shadow_len = (total_pixels + k - 1) / k;
+    // for (int i = 0; i < k; i++)
+    // {
+    //     shadow_array[i] = malloc(shadow_len * sizeof(uint16_t));
+    //     res[i] = sssh_extract_lsb1_kshadow(shadow_array[i], shadow_len, shadows[i], k);
+    //     x_array[i] = shadows[i]->reserved[2] | (shadows[i]->reserved[3] << 8);
+    // }
+
+    // // modularize
+    // BMPImageT *recovered_image = malloc(sizeof(BMPImageT));
+    // recovered_image->palette = shadows[0]->palette;
+    // recovered_image->width = res[0].s_width;
+    // recovered_image->height = res[0].s_height;
+    // recovered_image->bpp = shadows[0]->bpp;
+    // recovered_image->colors_used = shadows[0]->colors_used;
+    // recovered_image->reserved = malloc(4);
+    // recovered_image->reserved[0] = 0;
+    // recovered_image->reserved[1] = 0;
+    // recovered_image->reserved[2] = 0;
+    // recovered_image->reserved[3] = 0;
+
+    // // int image_size = recovered_image->width * recovered_image->height;
+
+    // int width_bytes = recovered_image->width * recovered_image->bpp / 8;
+    // int padded_row_bytes = bmp_align(width_bytes);
+    // int padded_image_size = padded_row_bytes * recovered_image->height;
+    // recovered_image->pixels = malloc(padded_image_size);
+
+    // for (int section = 0; section < shadow_len; ++section)
+    // {
+    //     uint8_t y_vals[MAX_K];
+    //     for (int j = 0; j < k; ++j)
+    //         y_vals[j] = shadow_array[j][section];
+
+    //     uint8_t recovered_coeffs[MAX_K];
+    //     lagrange_solve_coeffs(y_vals, x_array, k, recovered_coeffs);
+
+    //     for (int i = 0; i < k; ++i)
+    //     {
+    //         int pixel_index = section * k + i;
+    //         if (pixel_index >= total_pixels)
+    //             break;
+
+    //         uint8_t *px = bmp_get_pixel_address(recovered_image, pixel_index % recovered_image->width, pixel_index / recovered_image->width);
+    //         *px = recovered_coeffs[i];
+    //     }
+    // }
+
+    // uint8_t *rng_table = ptable_get_rng_table_4bytealigned(recovered_image->width, recovered_image->height, seed);
+    // if (!rng_table)
+    // {
+    //     fprintf(stderr, "Failed to generate RNG table\n");
+    //     return NULL;
+    // }
+
+    // uint8_t *ptr = recovered_image->pixels;
+    // // for (int i = 0; i < padded_image_size; ++i)
+    // // {
+    // //     ptr[i] ^= rng_table[i];
+    // // }
+
+    // fprintf(stdout, "Recovered image size: %d bytes\n", padded_image_size);
+    // fprintf(stdout, "Recovered image width: %d pixels\n", recovered_image->width);
+    // fprintf(stdout, "Recovered image height: %d pixels\n", recovered_image->height);
+    // fprintf(stdout, "Recovered image bpp: %d bits\n", recovered_image->bpp);
+    // fprintf(stdout, "Recovered image colors used: %d\n", recovered_image->colors_used);
+    // fprintf(stdout, "Recovered image reserved: %d %d %d %d\n", recovered_image->reserved[0], recovered_image->reserved[1], recovered_image->reserved[2], recovered_image->reserved[3]);
+    // fprintf(stdout, "Recovered image palette: %p\n", recovered_image->palette);
+    // fprintf(stdout, "Recovered image pixels: %p\n", recovered_image->pixels);
+    // bmp_save("recovered.bmp", recovered_image);
+    // return recovered_image;
 }

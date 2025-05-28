@@ -38,11 +38,11 @@ bool sssh_8bit_lsb_into_cover(const uint8_t *shadow_data, size_t shadow_len, BMP
  * @note The width and height are stored in the first 4 bytes of the cover image, with
  *       the width in the first 2 bytes and the height in the next 2 bytes.
  */
-bool sssh_lsb1_into_cover_k(const uint16_t *shadow_data, size_t shadow_len, BMPImageT *cover, uint16_t seed, int k, int16_t s_width, int16_t s_height);
+bool sssh_lsb1_into_cover_k(const uint8_t *shadow_data, size_t shadow_len, BMPImageT *cover, uint16_t seed, int k, int16_t s_width, int16_t s_height);
 
 bool extract_shadow_lsb_to_buffer(uint8_t *out_shadow_data, size_t shadow_len, const BMPImageT *cover);
 
-LSBDecodeResultT sssh_extract_lsb1_kshadow(uint16_t *out_shadow_data, size_t shadow_len, const BMPImageT *cover, int k);
+LSBDecodeResultT sssh_extract_lsb1_kshadow(uint8_t *out_shadow_data, size_t shadow_len, const BMPImageT *cover, int k);
 
 LSBDecodeResultT sssh_extract_kshadow_dimensions(const BMPImageT *cover);
 #endif
