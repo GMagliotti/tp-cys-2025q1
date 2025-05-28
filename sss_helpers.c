@@ -230,6 +230,86 @@ LSBDecodeResultT sssh_extract_kshadow_dimensions(const BMPImageT *cover)
     return (LSBDecodeResultT){.result = true, .s_width = s_width, .s_height = s_height};
 }
 
+static int ends_with_bmp(const char *filename) {
+    const char *dot = strrchr(filename, '.');
+    return dot && strcmp(dot, ".bmp") == 0;
+}
+
+bool sssh_can_hide_bits(const BMPImageT *cover, size_t bits_needed)
+{
+    if (!cover || !cover->pixels)
+        return false;
+
+    uint32_t width_bytes = cover->width * cover->bpp / 8;
+    uint32_t padded_width_bytes = bmp_align(width_bytes); // Align to 4 bytes
+    size_t cover_capacity = padded_width_bytes * cover->height;
+
+    return cover_capacity >= bits_needed;
+}
+
+BMPImageT **load_bmp_covers(const char *covers_dir, uint32_t n, size_t bits_needed) {
+    DIR *dir = opendir(covers_dir);
+    if (!dir) {
+        perror("Error opening covers directory");
+        return NULL;
+    }
+
+    BMPImageT **covers = calloc(n, sizeof(BMPImageT *));
+    if (!covers) {
+        perror("Error allocating memory for cover images");
+        closedir(dir);
+        return NULL;
+    }
+
+    struct dirent *entry;
+    uint32_t count = 0;
+
+    while ((entry = readdir(dir)) != NULL && count < n) {
+        if (entry->d_type == DT_REG && ends_with_bmp(entry->d_name)) {
+            char full_path[512];
+            snprintf(full_path, sizeof(full_path), "%s/%s", covers_dir, entry->d_name);
+
+            BMPImageT *bmp = bmp_load(full_path);
+            if (!bmp) {
+                fprintf(stderr, "Failed to load cover image '%s'\n", full_path);
+                continue;
+            }
+
+            if (!sssh_can_hide_bits(bmp, bits_needed)) {
+                fprintf(stderr, "Cover image '%s' too small to hide required bits\n", full_path);
+                bmp_unload(bmp);
+                continue;
+            }
+
+            covers[count++] = bmp;
+        }
+    }
+
+    closedir(dir);
+
+    if (count < n) {
+        fprintf(stderr, "Not enough suitable .bmp files in '%s' (found %d, need %d)\n", covers_dir, count, n);
+        for (uint32_t i = 0; i < count; i++) {
+            bmp_unload(covers[i]);
+        }
+        free(covers);
+        return NULL;
+    }
+
+    return covers;
+}
+
+void free_bmp_covers(BMPImageT **covers, uint32_t k) {
+    if (!covers) return;
+
+    for (uint32_t i = 0; i < k; i++) {
+        if (covers[i]) {
+            bmp_unload(covers[i]);
+        }
+    }
+    free(covers);
+}
+
 #undef METADATA_SIZE
 
 // cover

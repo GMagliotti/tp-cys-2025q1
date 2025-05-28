@@ -391,18 +391,14 @@ BMPImageT **sss_distribute_8(BMPImageT *image, uint32_t k, uint32_t n, const cha
 
     for (int i = 0; i < n; i++)
     {
-        char cover_path[512];
-        snprintf(cover_path, sizeof(cover_path), "%s/cover1.bmp", covers_dir);
-
-        BMPImageT *cover = bmp_load(cover_path);
-        if (!cover)
-        {
-            fprintf(stderr, "Failed to load cover image '%s' for shadow %d\n", cover_path, i);
+        int size = (shadows[i]->width * shadows[i]->height + k - 1) / k;
+        BMPImageT **covers = load_bmp_covers(covers_dir, n, size*8);
+        if (!covers) {
+            fprintf(stderr, "Failed to load enough cover images from '%s'\n", covers_dir);
             exit(EXIT_FAILURE);
         }
 
-        int size = (shadows[i]->width * shadows[i]->height + k - 1) / k;
-        bool ok = sssh_8bit_lsb_into_cover(shadow_data[i], size, cover, seed);
+        bool ok = sssh_8bit_lsb_into_cover(shadow_data[i], size, covers[i], seed);
         if (!ok)
         {
             fprintf(stderr, "Failed to hide shadow %d in cover image\n", i);
@@ -411,15 +407,15 @@ BMPImageT **sss_distribute_8(BMPImageT *image, uint32_t k, uint32_t n, const cha
 
         // Guardar la imagen stego
         uint16_t x = i + 1;
-        cover->reserved[0] = seed & 0xFF;
-        cover->reserved[1] = (seed >> 8) & 0xFF;
-        cover->reserved[2] = x & 0xFF;
-        cover->reserved[3] = (x >> 8) & 0xFF;
+        covers[i]->reserved[0] = seed & 0xFF;
+        covers[i]->reserved[1] = (seed >> 8) & 0xFF;
+        covers[i]->reserved[2] = x & 0xFF;
+        covers[i]->reserved[3] = (x >> 8) & 0xFF;
 
         char output_path[512];
         snprintf(output_path, sizeof(output_path), "%s/stego%d.bmp", output_dir, i + 1);
-        bmp_save(output_path, cover);
-        bmp_unload(cover);
+        bmp_save(output_path, covers[i]);
+        bmp_unload(covers[i]);
     }
 
     return shadows;
@@ -446,18 +442,14 @@ BMPImageT **sss_distribute_generic(BMPImageT *image, uint32_t k, uint32_t n, con
 
     for (int i = 0; i < n; i++)
     {
-        char cover_path[512];
-        snprintf(cover_path, sizeof(cover_path), "%s/cover1.bmp", covers_dir);
-
-        BMPImageT *cover = bmp_load(cover_path);
-        if (!cover)
-        {
-            fprintf(stderr, "Failed to load cover image '%s' for shadow %d\n", cover_path, i);
+        int size = (shadows[i]->width * shadows[i]->height + k - 1) / k;
+        BMPImageT **covers = load_bmp_covers(covers_dir, n, size*8);
+        if (!covers) {
+            fprintf(stderr, "Failed to load enough cover images from '%s'\n", covers_dir);
             exit(EXIT_FAILURE);
         }
 
-        int size = (shadows[i]->width * shadows[i]->height + k - 1) / k;
-        bool ok = sssh_lsb1_into_cover_k(shadow_data[i], size, cover, seed, k, image->width, image->height);
+        bool ok = sssh_lsb1_into_cover_k(shadow_data[i], size, covers[i], seed, k, image->width, image->height);
         if (!ok)
         {
             fprintf(stderr, "Failed to hide shadow %d in cover image\n", i);
@@ -466,15 +458,15 @@ BMPImageT **sss_distribute_generic(BMPImageT *image, uint32_t k, uint32_t n, con
 
         // Guardar la imagen stego
         uint16_t x = i + 1;
-        cover->reserved[0] = seed & 0xFF;
-        cover->reserved[1] = (seed >> 8) & 0xFF;
-        cover->reserved[2] = x & 0xFF;
-        cover->reserved[3] = (x >> 8) & 0xFF;
+        covers[i]->reserved[0] = seed & 0xFF;
+        covers[i]->reserved[1] = (seed >> 8) & 0xFF;
+        covers[i]->reserved[2] = x & 0xFF;
+        covers[i]->reserved[3] = (x >> 8) & 0xFF;
 
         char output_path[512];
         snprintf(output_path, sizeof(output_path), "%s/stego%d.bmp", output_dir, i + 1);
-        bmp_save(output_path, cover);
-        bmp_unload(cover);
+        bmp_save(output_path, covers[i]);
+        bmp_unload(covers[i]);
     }
 
     return shadows;
