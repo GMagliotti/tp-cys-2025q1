@@ -4,6 +4,7 @@
 #include <string.h>
 #include <getopt.h>
 #include <dirent.h>
+#include "sss_helpers.h"
 
 int main(int argc, char const *argv[]) {
     int distribute = 0;
@@ -87,16 +88,13 @@ int main(int argc, char const *argv[]) {
         sss_distribute(image, k, n, dir, "./stego_images");
     } else if (recover) {
         // Recover
-        BMPImageT *shadows[n];
-        char filename[512];
+        if (n == -1) {
+            n = k;
+        }
 
-        for (int i = 0; i < n; i++) {
-            snprintf(filename, sizeof(filename), "%s/stego%d.bmp", dir, i + 1);
-            shadows[i] = bmp_load(filename);
-            if (!shadows[i]) {
-                fprintf(stderr, "Could not load: %s\n", filename);
-                return 1;
-            }
+        BMPImageT **shadows = load_bmp_images(dir, n, NULL, NULL);
+        if (!shadows) {
+            return 1;
         }
 
         BMPImageT *recovered = sss_recover(shadows, k, secret_file);
