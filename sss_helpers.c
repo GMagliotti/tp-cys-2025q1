@@ -247,16 +247,21 @@ bool sssh_can_hide_bits(const BMPImageT *cover, size_t bits_needed)
     return cover_capacity >= bits_needed;
 }
 
-BMPImageT **load_bmp_covers(const char *covers_dir, uint32_t n, size_t bits_needed) {
-    DIR *dir = opendir(covers_dir);
+BMPImageT **load_bmp_images(
+    const char *dir_path,
+    uint32_t max_images,
+    BMPFilterFunc filter,
+    void *context
+) {
+    DIR *dir = opendir(dir_path);
     if (!dir) {
-        perror("Error opening covers directory");
+        perror("Error opening BMP image directory");
         return NULL;
     }
 
-    BMPImageT **covers = calloc(n, sizeof(BMPImageT *));
-    if (!covers) {
-        perror("Error allocating memory for cover images");
+    BMPImageT **images = calloc(max_images, sizeof(BMPImageT *));
+    if (!images) {
+        perror("Error allocating memory for BMP images");
         closedir(dir);
         return NULL;
     }
@@ -264,50 +269,63 @@ BMPImageT **load_bmp_covers(const char *covers_dir, uint32_t n, size_t bits_need
     struct dirent *entry;
     uint32_t count = 0;
 
-    while ((entry = readdir(dir)) != NULL && count < n) {
+    while ((entry = readdir(dir)) != NULL && count < max_images) {
         if (entry->d_type == DT_REG && ends_with_bmp(entry->d_name)) {
             char full_path[512];
-            snprintf(full_path, sizeof(full_path), "%s/%s", covers_dir, entry->d_name);
+            snprintf(full_path, sizeof(full_path), "%s/%s", dir_path, entry->d_name);
 
             BMPImageT *bmp = bmp_load(full_path);
             if (!bmp) {
-                fprintf(stderr, "Failed to load cover image '%s'\n", full_path);
+                fprintf(stderr, "Failed to load BMP image '%s'\n", full_path);
                 continue;
             }
 
-            if (!sssh_can_hide_bits(bmp, bits_needed)) {
-                fprintf(stderr, "Cover image '%s' too small to hide required bits\n", full_path);
+            if (filter && !filter(bmp, full_path, context)) {
                 bmp_unload(bmp);
                 continue;
             }
 
-            covers[count++] = bmp;
+            images[count++] = bmp;
         }
     }
 
     closedir(dir);
 
-    if (count < n) {
-        fprintf(stderr, "Not enough suitable .bmp files in '%s' (found %d, need %d)\n", covers_dir, count, n);
+    if (count < max_images) {
+        fprintf(stderr, "Only %d suitable .bmp files found in '%s' (need %d)\n", count, dir_path, max_images);
         for (uint32_t i = 0; i < count; i++) {
-            bmp_unload(covers[i]);
+            bmp_unload(images[i]);
         }
-        free(covers);
+        free(images);
         return NULL;
     }
 
-    return covers;
+    return images;
 }
 
-void free_bmp_covers(BMPImageT **covers, uint32_t k) {
-    if (!covers) return;
+
+bool can_hide_bits_filter(const BMPImageT *bmp, const char *path, void *ctx) {
+    size_t bits_needed = *((size_t *)ctx);
+    if (!sssh_can_hide_bits(bmp, bits_needed)) {
+        fprintf(stderr, "Cover image '%s' too small to hide required bits\n", path);
+        return false;
+    }
+    return true;
+}
+
+BMPImageT **load_bmp_covers(const char *covers_dir, uint32_t n, size_t bits_needed) {
+    return load_bmp_images(covers_dir, n, can_hide_bits_filter, &bits_needed);
+}
+
+void free_bmp_covers(BMPImageT **images, uint32_t k) {
+    if (!images) return;
 
     for (uint32_t i = 0; i < k; i++) {
-        if (covers[i]) {
-            bmp_unload(covers[i]);
+        if (images[i]) {
+            bmp_unload(images[i]);
         }
     }
-    free(covers);
+    free(images);
 }
 
 #undef METADATA_SIZE

@@ -13,6 +13,8 @@ typedef struct {
     int16_t s_height;
 } LSBDecodeResultT;
 
+typedef bool (*BMPFilterFunc)(const BMPImageT *bmp, const char *path, void *context);
+
 /**
  * Hide an array of data inside a cover image using LSB steganography.
  * @param shadow_data The array of data to hide.
@@ -57,6 +59,27 @@ LSBDecodeResultT sssh_extract_lsb1_kshadow(uint8_t *out_shadow_data, size_t shad
 LSBDecodeResultT sssh_extract_kshadow_dimensions(const BMPImageT *cover);
 
 /**
+ * Loads up to `max_images` .bmp files from a directory, applying an optional filter.
+ *
+ * @param dir_path The directory path to search for .bmp files.
+ * @param max_images The maximum number of BMP images to load.
+ * @param filter A callback function to validate/filter images, or NULL to accept all.
+ * @param context An optional context passed to the filter.
+ *
+ * @return An array of BMPImageT pointers (must be freed), or NULL on failure.
+ */
+BMPImageT **load_bmp_images(const char *dir_path, uint32_t max_images, BMPFilterFunc filter, void *context);
+
+
+/**
+ * Frees an array of BMPImageT pointers previously allocated by load_bmp_images.
+ *
+ * @param images Array of BMPImageT pointers.
+ * @param n Number of cover images in the array.
+ */
+void free_bmp_images(BMPImageT **images, uint32_t n);
+
+/**
  * Load n suitable BMP cover images from a directory that can hide the required number of bits.
  *
  * @param covers_dir The path to the directory containing the .bmp files.
@@ -66,13 +89,5 @@ LSBDecodeResultT sssh_extract_kshadow_dimensions(const BMPImageT *cover);
  * @return An array of BMPImageT pointers, or NULL if not enough suitable images are found.
  */
 BMPImageT **load_bmp_covers(const char *covers_dir, uint32_t n, size_t bits_needed);
-
-/**
- * Frees an array of BMPImageT pointers previously allocated by load_bmp_covers.
- *
- * @param covers Array of BMPImageT pointers.
- * @param n Number of cover images in the array.
- */
-void free_bmp_covers(BMPImageT **covers, uint32_t n);
 
 #endif
