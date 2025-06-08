@@ -658,7 +658,7 @@ BMPImageT *sss_recover_8(BMPImageT **shadows, uint32_t k, const char *recovered_
     for (int i = 0; i < k; i++)
     {
         shadow_array[i] = calloc(shadow_len, sizeof(uint8_t));
-        extract_shadow_lsb_to_buffer(shadow_array[i], shadow_len, shadows[i]);
+        lsb_decoder_lsb1_extract_to_buffer(shadow_array[i], shadow_len, shadows[i]);
         x_array[i] = shadows[i]->reserved[2] | (shadows[i]->reserved[3] << 8);
     }
 
@@ -695,8 +695,10 @@ BMPImageT *sss_recover_8(BMPImageT **shadows, uint32_t k, const char *recovered_
             int pixel_index = section * k + i;
             if (pixel_index >= recovered_image->width * recovered_image->height)
                 break;
-            uint8_t *px = bmp_get_pixel_address(recovered_image, pixel_index % recovered_image->width, pixel_index / recovered_image->width);
-            *px = recovered_coeffs[i];
+            uint8_t *ptr = recovered_image->pixels;
+            ptr[pixel_index] = recovered_coeffs[i];
+            //uint8_t *px = bmp_get_pixel_address(recovered_image, pixel_index % recovered_image->width, pixel_index / recovered_image->width);
+            //*px = recovered_coeffs[i];
         }
     }
 
@@ -704,16 +706,18 @@ BMPImageT *sss_recover_8(BMPImageT **shadows, uint32_t k, const char *recovered_
     rngpt_set_seed(seed);
     int scanline_size = bmp_align(recovered_image->width);
     int image_size = scanline_size * recovered_image->height;
-    uint8_t *rng_table = rngpt_get_byte_table_noalign(image_size);
+    uint8_t *rng_table = rngpt_get_byte_table_4balign(recovered_image);
     if (!rng_table)
     {
         fprintf(stderr, "Failed to generate RNG table\n");
         return NULL;
     }
 
-    rngpt_inplace_xor_aligned(recovered_image, rng_table);
+    rngpt_inplace_xor(recovered_image->pixels, rng_table, image_size);
 
     bmp_save(recovered_filename, recovered_image);
+    free(shadow_array);
+    free(x_array); // Unload the first shadow to free palette and other resources
     return recovered_image;
 }
 
@@ -738,12 +742,12 @@ BMPImageT *sss_recover_generic(BMPImageT **shadows, uint32_t k, const char *reco
 
     uint8_t **shadow_array = malloc(k * sizeof(uint8_t *));
     uint16_t *x_array = malloc(k * sizeof(uint16_t));
-    LSBDecodeResultT tmp = sssh_extract_kshadow_dimensions(shadows[0]);
+    LSBDecodeResult tmp = lsb_decoder_lsb1_get_dimensions(shadows[0]);
     int shadow_len = (tmp.s_width * tmp.s_height + k - 1) / k;
     for (int i = 0; i < k; i++)
     {
         shadow_array[i] = calloc(shadow_len, sizeof(uint16_t));
-        sssh_extract_lsb1_kshadow(shadow_array[i], shadow_len, shadows[i], k);
+        lsb_decoder_lsb1_extract_to_buffer_extended(shadow_array[i], shadow_len, shadows[i], k);
         x_array[i] = shadows[i]->reserved[2] | (shadows[i]->reserved[3] << 8);
     }
 
@@ -773,6 +777,7 @@ BMPImageT *sss_recover_generic(BMPImageT **shadows, uint32_t k, const char *reco
             y_vals[j] = shadow_array[j][section];
 
         uint8_t recovered_coeffs[MAX_K];
+        //lagrange_reconstruct_coeffs(y_vals, x_array, k, recovered_coeffs);
         lagrange_solve_coeffs(y_vals, x_array, k, recovered_coeffs);
 
         for (int i = 0; i < k; ++i)
