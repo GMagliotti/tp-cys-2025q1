@@ -48,12 +48,10 @@ LSBDecodeResult lsb_decoder_lsb1_extract_to_buffer_extended(uint8_t *out_shadow_
         return (LSBDecodeResult){.result = false, .s_width = 0, .s_height = 0};
 
     size_t bits_needed = shadow_len * 8 + METADATA_SIZE;
-    fprintf(stdout, "bits_needed: %zu\n", bits_needed);
 
     uint32_t width_bytes = cover->width * cover->bpp / 8;
     uint32_t padded_width_bytes = bmp_align(width_bytes); // Align to 4 bytes
     size_t cover_capacity = padded_width_bytes * cover->height;
-    fprintf(stdout, "cover_capacity: %zu\n", cover_capacity);
 
     if (cover_capacity < bits_needed)
     {

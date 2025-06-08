@@ -659,7 +659,6 @@ BMPImageT *sss_recover_8(BMPImageT **shadows, uint32_t k, const char *recovered_
     }
 
     uint16_t seed = shadows[0]->reserved[0] | (shadows[0]->reserved[1] << 8);
-    fprintf(stderr, "Recovering image with k=%d, seed=%d\n", k, seed);
     // bool flag = true, set = false,
     bool error = false;
     // int i = 0;
@@ -720,7 +719,6 @@ BMPImageT *sss_recover_8(BMPImageT **shadows, uint32_t k, const char *recovered_
         }
     }
 
-    fprintf(stdout, "Before setting seed: %d\n", seed);
     rngpt_set_seed(seed);
     int scanline_size = bmp_align(recovered_image->width);
     int image_size = scanline_size * recovered_image->height;
