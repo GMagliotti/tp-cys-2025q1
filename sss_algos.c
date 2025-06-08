@@ -390,7 +390,7 @@ BMPImageT **sss_distribute_8(BMPImageT *image, uint32_t k, uint32_t n, const cha
             exit(EXIT_FAILURE);
         }
 
-        bool ok = sssh_8bit_lsb_into_cover(shadow_data[i], size, covers[i], seed);
+        bool ok = lsb_encoder_lsb1_into_cover(shadow_data[i], size, covers[i], seed);
         if (!ok)
         {
             fprintf(stderr, "Failed to hide shadow %d in cover image\n", i);
@@ -441,7 +441,7 @@ BMPImageT **sss_distribute_generic(BMPImageT *image, uint32_t k, uint32_t n, con
             exit(EXIT_FAILURE);
         }
 
-        bool ok = sssh_lsb1_into_cover_k(shadow_data[i], size, covers[i], seed, k, image->width, image->height);
+        bool ok = lsb_encoder_lsb1_into_cover_extended(shadow_data[i], size, covers[i], seed, k, image->width, image->height);
         if (!ok)
         {
             fprintf(stderr, "Failed to hide shadow %d in cover image\n", i);
@@ -695,10 +695,10 @@ BMPImageT *sss_recover_8(BMPImageT **shadows, uint32_t k, const char *recovered_
             int pixel_index = section * k + i;
             if (pixel_index >= recovered_image->width * recovered_image->height)
                 break;
-            uint8_t *ptr = recovered_image->pixels;
-            ptr[pixel_index] = recovered_coeffs[i];
-            //uint8_t *px = bmp_get_pixel_address(recovered_image, pixel_index % recovered_image->width, pixel_index / recovered_image->width);
-            //*px = recovered_coeffs[i];
+            // uint8_t *ptr = recovered_image->pixels;
+            // ptr[pixel_index] = recovered_coeffs[i];
+            uint8_t *px = bmp_get_pixel_address(recovered_image, pixel_index % recovered_image->width, pixel_index / recovered_image->width);
+            *px = recovered_coeffs[i];
         }
     }
 
