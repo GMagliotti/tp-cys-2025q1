@@ -171,6 +171,25 @@ BMPImageT *bmp_copy(BMPImageT *image)
     return copy;
 }
 
+BMPColorT *bmp_copy_palette(BMPImageT *image)
+{
+    if (image == NULL || image->palette == NULL)
+    {
+        fprintf(stderr, "bmp_copy_palette: Invalid image or no palette\n");
+        return NULL;
+    }
+
+    uint32_t palette_size = (image->bpp <= 8) ? ((1 << image->bpp) * sizeof(BMPColorT)) : 0;
+    BMPColorT *palette_copy = malloc(palette_size);
+    if (palette_copy == NULL)
+    {
+        fprintf(stderr, "bmp_copy_palette: Error allocating memory for palette copy\n");
+        return NULL;
+    }
+    memcpy(palette_copy, image->palette, palette_size);
+    return palette_copy;
+}
+
 BmpImage *bmp_create(int32_t width, int32_t height, uint8_t bpp, BMPColorT *palette, uint32_t pcolors)
 {
     if (width <= 0 || height == 0)
@@ -393,11 +412,11 @@ int bmp_save(const char *filename, const BmpImage *image)
     iheader.planes = 1;
     iheader.bpp = image->bpp;
     iheader.compression = 0;
-    iheader.image_size = 0;                                          // Set to 0 for uncompressed
-    iheader.h_resolution = 0;                                        // Set to 0 for default resolution
-    iheader.v_resolution = 0;                                        // Set to 0 for default resolution
-    iheader.colors_used = image->colors_used;                       // Set to 0 when no palette is used
-    iheader.important_colors = 0;                                    // Set to 0 for all colors
+    iheader.image_size = 0;                   // Set to 0 for uncompressed
+    iheader.h_resolution = 0;                 // Set to 0 for default resolution
+    iheader.v_resolution = 0;                 // Set to 0 for default resolution
+    iheader.colors_used = image->colors_used; // Set to 0 when no palette is used
+    iheader.important_colors = 0;             // Set to 0 for all colors
     fwrite(&fheader, sizeof(BitmapFileHeader), 1, file);
     if (ferror(file))
     {

@@ -68,6 +68,15 @@ typedef struct BmpImageT BmpImage;
  */
 BMPImageT *bmp_copy(BMPImageT *image);
 
+/**
+ * Generates a deep copy of the palette (if present) from a BMP image.
+ * @param image Pointer to the source BMPImageT structure. Must be non-NULL and have a valid palette.
+ * @return A pointer to a newly allocated array of BMPColorT containing the copied palette,
+ *         or NULL if the input image is invalid or memory allocation fails.
+ * @note The caller is responsible for freeing the returned palette.
+ */
+BMPColorT *bmp_copy_palette(BMPImageT *image);
+
 /** Create an empty bmp image with all necessary memory allocations. 
  * 
  * @param width The width of the image in pixels.
