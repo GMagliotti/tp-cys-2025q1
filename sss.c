@@ -32,8 +32,8 @@ BMPImageT **sss_distribute(BMPImageT *image, uint32_t k, uint32_t n, const char 
         fprintf(stderr, "Invalid parameters: n must be greater than 1, and k must be smaller than n");
     }
 
-    BMPImageT **shadows = get_distribute_function(k)(image, k, n, covers_dir, output_dir);
-    return shadows;
+    get_distribute_function(k)(image, k, n, covers_dir, output_dir);
+    return NULL;
 }
 
 BMPImageT *sss_recover(BMPImageT **shadows, uint32_t k, const char * recovered_filename)

@@ -86,6 +86,7 @@ int main(int argc, char const *argv[]) {
         }
 
         sss_distribute(image, k, n, dir, "./stego_images");
+        bmp_unload(image);
     } else if (recover) {
         // Recover
         if (n == -1) {
@@ -100,9 +101,14 @@ int main(int argc, char const *argv[]) {
         BMPImageT *recovered = sss_recover(shadows, k, secret_file);
         if (recovered) {
             bmp_save(secret_file, recovered);
+            bmp_unload(recovered);
         } else {
             fprintf(stderr, "Failure to recover the secret\n");
         }
+        for (int i = 0; i < n; i++) {
+            bmp_unload(shadows[i]);
+        }
+        free(shadows);
     }
 
     return 0;

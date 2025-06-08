@@ -39,6 +39,37 @@ rngpt_get_byte_table_noalign(size_t size)
     return table;
 }
 
+uint8_t *
+rngpt_get_byte_table_4balign(BMPImageT *image)
+{
+    int scanline_size = bmp_align(image->width);
+    int image_size = scanline_size * image->height;
+    uint8_t *table = malloc(image_size * sizeof(uint8_t));
+
+    if (table == NULL)
+    {
+        fprintf(stderr, "Failed to allocate memory for RNG table\n");
+        return NULL;
+    }
+
+    printf("Using seed: %ld (%lx)\n", gl_seed, gl_seed);
+    printf("Generated with seed: %d (%x)\n", gl_seed_gen, gl_seed_gen);
+
+    for (int y = 0; y < image->height; y++)
+    {
+        for (int x = 0; x < scanline_size; x++)
+        {
+            int index = y * scanline_size + x;
+            if (index < image_size)
+            {
+                table[index] = rngpt_next_char();
+            }
+        }
+    }
+    
+    return table;
+}
+
 void
 rngpt_inplace_xor(uint8_t *table1, uint8_t *table2, size_t size)
 {

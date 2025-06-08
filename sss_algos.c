@@ -372,7 +372,7 @@ BMPImageT **sss_distribute_8(BMPImageT *image, uint32_t k, uint32_t n, const cha
         shadows[i]->bpp = image->bpp;
         shadows[i]->width = image->width;
         shadows[i]->height = image->height;
-        shadows[i]->palette = image->palette; // TODO double free will be fixed later
+        shadows[i]->palette = bmp_copy_palette(image); 
     }
     uint8_t *shadow_data[256] = {0};
     if (sss_distribute_share_image(image, shadows, k, n, shadow_data) == false)
@@ -381,10 +381,11 @@ BMPImageT **sss_distribute_8(BMPImageT *image, uint32_t k, uint32_t n, const cha
         exit(EXIT_FAILURE);
     }
 
+    int bytes_needed = (image->width * image->height + k - 1) / k * 8;
+    BMPImageT **covers = load_bmp_covers(covers_dir, n, bytes_needed);
     for (int i = 0; i < n; i++)
     {
         int size = (shadows[i]->width * shadows[i]->height + k - 1) / k;
-        BMPImageT **covers = load_bmp_covers(covers_dir, n, size*8);
         if (!covers) {
             fprintf(stderr, "Failed to load enough cover images from '%s'\n", covers_dir);
             exit(EXIT_FAILURE);
@@ -409,8 +410,16 @@ BMPImageT **sss_distribute_8(BMPImageT *image, uint32_t k, uint32_t n, const cha
         bmp_save(output_path, covers[i]);
         bmp_unload(covers[i]);
     }
+    free(covers);
 
-    return shadows;
+    for (int i = 0; i < n; i++)
+    {
+        free(shadow_data[i]);
+        bmp_unload(shadows[i]);
+    }
+    free(shadows);
+
+    return NULL;
 }
 
 BMPImageT **sss_distribute_generic(BMPImageT *image, uint32_t k, uint32_t n, const char *covers_dir, const char *output_dir)
@@ -423,7 +432,7 @@ BMPImageT **sss_distribute_generic(BMPImageT *image, uint32_t k, uint32_t n, con
         shadows[i]->bpp = image->bpp;
         shadows[i]->width = image->width;
         shadows[i]->height = image->height;
-        shadows[i]->palette = image->palette; // TODO double free will be fixed later
+        shadows[i]->palette = bmp_copy_palette(image);
     }
     uint8_t *shadow_data[256] = {0};
     if (sss_distribute_share_image_k(image, shadows, k, n, shadow_data) == false)
@@ -432,10 +441,11 @@ BMPImageT **sss_distribute_generic(BMPImageT *image, uint32_t k, uint32_t n, con
         exit(EXIT_FAILURE);
     }
 
+    BMPImageT **covers = load_bmp_covers(covers_dir, n, (image->width * image->height + k - 1) / k * 8);
     for (int i = 0; i < n; i++)
     {
         int size = (shadows[i]->width * shadows[i]->height + k - 1) / k;
-        BMPImageT **covers = load_bmp_covers(covers_dir, n, size*8);
+       // BMPImageT **covers = load_bmp_covers(covers_dir, n, size*8);
         if (!covers) {
             fprintf(stderr, "Failed to load enough cover images from '%s'\n", covers_dir);
             exit(EXIT_FAILURE);
@@ -460,8 +470,16 @@ BMPImageT **sss_distribute_generic(BMPImageT *image, uint32_t k, uint32_t n, con
         bmp_save(output_path, covers[i]);
         bmp_unload(covers[i]);
     }
+    free(covers);
 
-    return shadows;
+    for (int i = 0; i < n; i++)
+    {
+        free(shadow_data[i]);
+        bmp_unload(shadows[i]);
+    }
+    free(shadows);
+
+    return NULL;
 }
 
 // Modular inverse with extended Euclidean algorithm
@@ -664,7 +682,7 @@ BMPImageT *sss_recover_8(BMPImageT **shadows, uint32_t k, const char *recovered_
 
     // modularize
     BMPImageT *recovered_image = malloc(sizeof(BMPImageT));
-    recovered_image->palette = shadows[0]->palette;
+    recovered_image->palette = bmp_copy_palette(shadows[0]);
     recovered_image->width = shadows[0]->width;
     recovered_image->height = shadows[0]->height;
     recovered_image->bpp = shadows[0]->bpp;
@@ -714,8 +732,13 @@ BMPImageT *sss_recover_8(BMPImageT **shadows, uint32_t k, const char *recovered_
     }
 
     rngpt_inplace_xor(recovered_image->pixels, rng_table, image_size);
+    free(rng_table);
 
     bmp_save(recovered_filename, recovered_image);
+    for (int i = 0; i < k; i++)
+    {
+        free(shadow_array[i]);
+    }
     free(shadow_array);
     free(x_array); // Unload the first shadow to free palette and other resources
     return recovered_image;
@@ -753,7 +776,7 @@ BMPImageT *sss_recover_generic(BMPImageT **shadows, uint32_t k, const char *reco
 
     // modularize
     BMPImageT *recovered_image = malloc(sizeof(BMPImageT));
-    recovered_image->palette = shadows[0]->palette;
+    recovered_image->palette = bmp_copy_palette(shadows[0]);
     recovered_image->width = tmp.s_width;
     recovered_image->height = tmp.s_height;
     recovered_image->bpp = shadows[0]->bpp;
@@ -803,5 +826,14 @@ BMPImageT *sss_recover_generic(BMPImageT **shadows, uint32_t k, const char *reco
     rngpt_inplace_xor_aligned(recovered_image, rng_table);
 
     bmp_save(recovered_filename, recovered_image);
+
+    for (int i = 0; i < k; i++)
+    {
+        free(shadow_array[i]);
+    }
+    free(shadow_array);
+    free(x_array); // Unload the first shadow to free palette and other resources
+    free(rng_table);
+
     return recovered_image;
 }

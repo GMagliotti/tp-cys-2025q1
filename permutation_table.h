@@ -12,6 +12,9 @@ rngpt_set_seed(int64_t s);
 uint8_t *
 rngpt_get_byte_table_noalign(size_t size);
 
+uint8_t *
+rngpt_get_byte_table_4balign(BMPImageT *image);
+
 void
 rngpt_inplace_xor(uint8_t *table1, uint8_t *table2, size_t size);
 
