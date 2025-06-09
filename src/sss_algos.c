@@ -87,7 +87,7 @@ bool sss_distribute_share_image(const BMPImageT *Q, BMPImageT **shadows, int k, 
         return false;
     }
 
-    uint32_t total_pixels = Q->width * Q->height;
+    uint32_t total_pixels = bmp_align(Q->width) * Q->height;
     uint8_t coeffs[MAX_K] = {0};
     memset(coeffs, 0, sizeof(coeffs));
     int sections = (total_pixels + k - 1) / k;
@@ -117,7 +117,9 @@ bool sss_distribute_share_image(const BMPImageT *Q, BMPImageT **shadows, int k, 
             }
             int x = index % Q->width;
             int y = index / Q->width;
-            coeffs[i] = *(uint8_t *)bmp_get_pixel_address(Q, x, y);
+            // coeffs[i] = *(uint8_t *)bmp_get_pixel_address(Q, x, y);
+            uint8_t *ptr = Q->pixels;
+            coeffs[i] = ptr[index];
         }
 
         // Step 5: Retry if any fj(x) == 256
@@ -155,8 +157,10 @@ bool sss_distribute_share_image(const BMPImageT *Q, BMPImageT **shadows, int k, 
             int shadow_idx = section;
             int x = shadow_idx % shadows[i]->width;
             int y = shadow_idx / shadows[i]->width;
-            uint8_t *px = (uint8_t *)bmp_get_pixel_address(shadows[i], x, y);
-            *px = (uint8_t)fx;
+            // uint8_t *px = (uint8_t *)bmp_get_pixel_address(shadows[i], x, y);
+            // *px = (uint8_t)fx;
+            uint8_t *ptr = shadows[i]->pixels;
+            ptr[shadow_idx] = (uint8_t)fx;
 
             shadow_data[i][section] = (uint8_t)fx;
         }
@@ -671,7 +675,7 @@ BMPImageT *sss_recover_8(BMPImageT **shadows, uint32_t k, const char *recovered_
 
     uint8_t **shadow_array = malloc(k * sizeof(uint8_t *));
     uint16_t *x_array = malloc(k * sizeof(uint16_t));
-    int shadow_len = (shadows[0]->width * shadows[0]->height + k - 1) / k;
+    int shadow_len = (bmp_align(shadows[0]->width) * shadows[0]->height + k - 1) / k;
     for (int i = 0; i < k; i++)
     {
         shadow_array[i] = calloc(shadow_len, sizeof(uint8_t));
