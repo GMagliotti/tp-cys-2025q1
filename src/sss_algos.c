@@ -716,10 +716,10 @@ BMPImageT *sss_recover_8(BMPImageT **shadows, uint32_t k, const char *recovered_
             int pixel_index = section * k + i;
             if (pixel_index >= recovered_image->width * recovered_image->height)
                 break;
-            // uint8_t *ptr = recovered_image->pixels;
-            // ptr[pixel_index] = recovered_coeffs[i];
-            uint8_t *px = bmp_get_pixel_address(recovered_image, pixel_index % recovered_image->width, pixel_index / recovered_image->width);
-            *px = recovered_coeffs[i];
+            uint8_t *ptr = recovered_image->pixels;
+            ptr[pixel_index] = recovered_coeffs[i];
+            // uint8_t *px = bmp_get_pixel_address(recovered_image, pixel_index % recovered_image->width, pixel_index / recovered_image->width);
+            // *px = recovered_coeffs[i];
         }
     }
 
