@@ -1,4 +1,4 @@
-#include "file_utils.h"
+#include "../include/file_utils.h"
 
 // todo use this instead of direct fread
 int32_t fileutils_fread(void *ptr, size_t size, size_t count, FILE *stream) {

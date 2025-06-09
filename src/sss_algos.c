@@ -1,4 +1,4 @@
-#include "sss_algos.h"
+#include "../include/sss_algos.h"
 #include <assert.h>
 
 #define PRIME_MODULUS 257

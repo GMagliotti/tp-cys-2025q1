@@ -1,4 +1,4 @@
-#include "bmp.h"
+#include "../include/bmp.h"
 #define CHECK_HEADER_RESERVED(a, b, c, d) (a == 0 && b == 0 && c == 0 && d == 0)
 
 #pragma pack(push, 1)

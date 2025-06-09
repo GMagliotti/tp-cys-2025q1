@@ -1,4 +1,4 @@
-#include "permutation_table.h"
+#include "../include/permutation_table.h"
 
 static uint16_t gl_seed_gen = 0L;
 static int64_t gl_seed = 0L;

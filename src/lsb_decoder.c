@@ -1,4 +1,4 @@
-#include "lsb_decoder.h"
+#include "../include/lsb_decoder.h"
 #define METADATA_SIZE 32 // 2 bytes for width and 2 bytes for height * 8 bits per byte
 
 bool lsb_decoder_lsb1_extract_to_buffer(uint8_t *out_shadow_data, size_t shadow_len, const BMPImageT *cover)

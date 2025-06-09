@@ -1,4 +1,4 @@
-#include "lsb_encoder.h"
+#include "../include/lsb_encoder.h"
 #define METADATA_SIZE 32 // 2 bytes for width and 2 bytes for height * 8 bits per byte
 
 bool lsb_encoder_lsb1_into_cover(const uint8_t *shadow_data, size_t shadow_len, BMPImageT *cover, uint16_t seed)

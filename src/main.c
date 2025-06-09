@@ -1,10 +1,10 @@
-#include "sss.h"
+#include "../include/sss.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
 #include <dirent.h>
-#include "sss_helpers.h"
+#include "../include/sss_helpers.h"
 
 int main(int argc, char const *argv[]) {
     int distribute = 0;

@@ -1,4 +1,4 @@
-#include "sss_helpers.h"
+#include "../include/sss_helpers.h"
 #define METADATA_SIZE 32 // 2 bytes for width and 2 bytes for height * 8 bits per byte
 
 static int ends_with_bmp(const char *filename)

@@ -1,5 +1,5 @@
-#include "sss.h"
-#include "sss_algos.h"
+#include "../include/sss.h"
+#include "../include/sss_algos.h"
 
 static DistributeFnT get_distribute_function(uint32_t k)
 {
